@@ -2,3 +2,4 @@ timestamp,ticker,direction,confidence_pct,last_close
 2026-04-14 18:09:56,SPY,UP,20.24,694.46
 2026-04-20 18:15:33,SPY,UP,12.92,708.72
 2026-04-21 18:36:39,SPY,UP,4.85,704.08
+2026-04-22 18:42:22,SPY,UP,8.71,711.21
