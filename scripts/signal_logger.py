@@ -8,6 +8,7 @@ from datetime import datetime
 # ── SETTINGS ──────────────────────────────────────
 TICKER   = "SPY"       # What to watch (SPY = S&P 500 ETF)
 LOOKBACK = 30          # How many candles to feed Kronos
+MIN_CONFIDENCE = 15.0
 LOG_FILE = os.path.expanduser(
     "~/trading-system/logs/signal_log.csv"
 )
@@ -71,6 +72,9 @@ def run():
         return
 
     direction, confidence = simple_kronos_signal(prices)
+    if confidence < MIN_CONFIDENCE:
+        print(f"Signal confidence {confidence}% below minimum {MIN_CONFIDENCE}%. Skipping.")
+        return
     log_signal(TICKER, direction, confidence, prices)
     print(f"Logged to: {LOG_FILE}")
 
