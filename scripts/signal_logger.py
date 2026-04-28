@@ -74,6 +74,7 @@ def run():
     direction, confidence = simple_kronos_signal(prices)
     if confidence < MIN_CONFIDENCE:
         print(f"Signal confidence {confidence}% below minimum {MIN_CONFIDENCE}%. Skipping.")
+        log_signal(TICKER, "SKIPPED", confidence, prices)
         return
     log_signal(TICKER, direction, confidence, prices)
     print(f"Logged to: {LOG_FILE}")
