@@ -73,7 +73,22 @@ def log_paper_trade(decision):
     print(f"Saved to: {PAPER_TRADES_LOG}")
     print("Fill in exit price manually when you close the trade.")
 
+SIGNAL_LOG_PATH = os.path.expanduser("~/trading-system/logs/signal_log.csv")
+
+def get_latest_signal_direction():
+    if not os.path.isfile(SIGNAL_LOG_PATH):
+        return None
+    with open(SIGNAL_LOG_PATH, "r") as f:
+        rows = list(csv.DictReader(f))
+    if not rows:
+        return None
+    return rows[-1].get("direction", "").strip()
+
 def run():
+    latest_direction = get_latest_signal_direction()
+    if latest_direction not in ("UP", "DOWN"):
+        print(f"Latest signal is {latest_direction} — no paper trade logged.")
+        return
     print("Checking latest Critic decision...")
     decision = get_latest_decision()
     if not decision:

@@ -46,14 +46,17 @@ def ask_andy(signal):
         api_key=os.environ.get("ANTHROPIC_API_KEY")
     )
 
+    votes = signal.get("votes", "No indicator data available")
     user_message = (
-        "Here is the latest signal from the Kronos model:\n\n"
+        "Here is the latest signal from the indicator model:\n\n"
         f"- Ticker:     {signal['ticker']}\n"
         f"- Direction:  {signal['direction']}\n"
         f"- Confidence: {signal['confidence_pct']}%\n"
         f"- Last close: ${signal['last_close']}\n"
         f"- Timestamp:  {signal['timestamp']}\n\n"
-        "Please provide your reasoning analysis."
+        "Indicator breakdown:\n"
+        f"{votes}\n\n"
+        "Please provide your reasoning analysis based on these specific indicators."
     )
 
     message = client.messages.create(
@@ -95,6 +98,10 @@ def run():
     print("Reading latest signal...")
     signal = get_latest_signal()
     if not signal:
+        return
+    direction = signal.get("direction", "").strip()
+    if direction not in ("UP", "DOWN"):
+        print(f"Signal is {direction} — not actionable. Skipping Andy analysis.")
         return
 
     print(f"Signal: {signal['ticker']} -> "

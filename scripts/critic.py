@@ -77,7 +77,22 @@ def log_decision(row, verdict, reason, confidence):
     print("  " + reason)
     print("Logged to: " + DECISIONS_LOG + "\n")
 
+SIGNAL_LOG = os.path.expanduser("~/trading-system/logs/signal_log.csv")
+
+def get_latest_signal_direction():
+    if not os.path.isfile(SIGNAL_LOG):
+        return None
+    with open(SIGNAL_LOG, "r") as f:
+        rows = list(csv.DictReader(f))
+    if not rows:
+        return None
+    return rows[-1].get("direction", "").strip()
+
 def run():
+    latest_direction = get_latest_signal_direction()
+    if latest_direction not in ("UP", "DOWN"):
+        print(f"Latest signal is {latest_direction} — not actionable. Skipping Critic.")
+        return
     print("Reading latest reasoning from Andy...")
     row = get_latest_reasoning()
     if not row:

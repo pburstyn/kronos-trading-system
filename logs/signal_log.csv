@@ -1,8 +1,4 @@
-timestamp,ticker,direction,confidence_pct,last_close
-2026-04-14 18:09:56,SPY,UP,20.24,694.46
-2026-04-20 18:15:33,SPY,UP,12.92,708.72
-2026-04-21 18:36:39,SPY,UP,4.85,704.08
-2026-04-22 18:42:22,SPY,UP,8.71,711.21
-2026-04-23 19:41:57,SPY,UP,1.53,708.45
-2026-04-27 19:10:02,SPY,SKIPPED,9.13,715.17
-2026-04-28 18:59:56,SPY,SKIPPED,2.52,711.69
+timestamp,ticker,direction,confidence_pct,last_close,votes
+2026-05-06 19:48:25,SPY,UP,40,733.83,"RSI 75.9: overbought, no vote | MACD above signal: bullish | MACD histogram growing: bullish | Volume 53.3M neutral"
+2026-05-06 19:52:58,SPY,UP,40,733.83,"MA50 $681.92 MA200 $nan: mixed structure | RSI 75.9: overbought, no vote | MACD above signal: bullish | MACD histogram growing: bullish | Volume 53.3M neutral"
+2026-05-06 19:54:33,SPY,UP,40,733.83,"Price $733.83 above MA50 $681.92 and MA200 $669.47: bullish structure | RSI 75.7: overbought, no vote | MACD above signal: bullish | MACD histogram growing: bullish | Volume 53.3M neutral"
