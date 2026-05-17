@@ -2,3 +2,6 @@ timestamp,ticker,direction,confidence_pct,last_close,votes
 2026-05-06 19:48:25,SPY,UP,40,733.83,"RSI 75.9: overbought, no vote | MACD above signal: bullish | MACD histogram growing: bullish | Volume 53.3M neutral"
 2026-05-06 19:52:58,SPY,UP,40,733.83,"MA50 $681.92 MA200 $nan: mixed structure | RSI 75.9: overbought, no vote | MACD above signal: bullish | MACD histogram growing: bullish | Volume 53.3M neutral"
 2026-05-06 19:54:33,SPY,UP,40,733.83,"Price $733.83 above MA50 $681.92 and MA200 $669.47: bullish structure | RSI 75.7: overbought, no vote | MACD above signal: bullish | MACD histogram growing: bullish | Volume 53.3M neutral"
+2026-05-11 18:00:05,SPY,WEAK,40,739.3,"Price $739.3 above MA50 $684.83 and MA200 $671.11: bullish structure | RSI 76.1: overbought, no vote | MACD above signal: bullish | MACD histogram growing: bullish | Volume 42.7M neutral"
+2026-05-12 18:00:05,SPY,NEUTRAL,0.0,738.18,"Price $738.18 above MA50 $685.91 and MA200 $671.64: bullish structure | RSI 74.7: overbought, no vote | MACD above signal: bullish | MACD histogram neutral: no vote"
+2026-05-13 18:00:04,SPY,NEUTRAL,0.0,742.31,"Price $742.31 above MA50 $687.18 and MA200 $672.19: bullish structure | RSI 76.5: overbought, no vote | MACD above signal: bullish | MACD histogram neutral: no vote"
