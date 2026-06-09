@@ -72,13 +72,19 @@ def generate_signal(df):
         vote_log.append("MACD histogram falling: bearish")
     else:
         vote_log.append("MACD histogram neutral: no vote")
+    # Conflict detection: block UP if RSI overbought
+    rsi_overbought = rsi > 70
     if bull_votes >= MIN_VOTES and bull_votes > bear_votes:
+        if rsi_overbought:
+            vote_log.append(f"VERDICT: CONFLICT — RSI {round(rsi,1)} overbought overrides {bull_votes} bull votes — forced NEUTRAL")
+            return "NEUTRAL", 0.0, vote_log
         direction = "UP"
         votes = bull_votes
     elif bear_votes >= MIN_VOTES and bear_votes > bull_votes:
         direction = "DOWN"
         votes = bear_votes
     else:
+        vote_log.append(f"VERDICT: NEUTRAL — bull_votes={bull_votes} bear_votes={bear_votes} did not meet MIN_VOTES={MIN_VOTES}")
         return "NEUTRAL", 0.0, vote_log
     if votes == 3:
         base = 60
