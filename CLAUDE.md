@@ -126,5 +126,5 @@ cd ~/trading-system && source venv/bin/activate && bash scripts/run_pipeline.sh
 - Scope Kronos done-for-you guide on Gumroad ($37-$67) once system generates income
 
 ## Last Updated
-2026-06-09 18:00:18
-**Last Signal:** 2026-06-09 18:00:04,SPY,DOWN,90,737.05,Price $737.05 above MA50 $717.45 and MA200 $682.63: bullish structure | RSI 49.0: bearish | MACD below signal: bearish | MACD histogram falling: bearish | Volume 86.8M above avg: confirms signal
+2026-06-10 18:00:14
+**Last Signal:** 2026-06-10 18:00:06,SPY,DOWN,90,725.43,Price $725.43 above MA50 $719.32 and MA200 $683.06: bullish structure | RSI 40.7: bearish | MACD below signal: bearish | MACD histogram falling: bearish | Volume 57.8M neutral
