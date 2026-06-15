@@ -1,6 +1,7 @@
 import anthropic
 import csv
 import os
+from datetime import datetime
 from dotenv import load_dotenv
 
 load_dotenv(os.path.expanduser("~/trading-system/.env"))
@@ -8,8 +9,9 @@ load_dotenv(os.path.expanduser("~/trading-system/.env"))
 REASONING_LOG = os.path.expanduser("~/trading-system/logs/reasoning_log.csv")
 DECISIONS_LOG = os.path.expanduser("~/trading-system/logs/decisions_log.csv")
 
+today = datetime.now().strftime("%A, %B %d, %Y, %I:%M %p")
 CRITIC_SYSTEM_PROMPT = (
-    "You are a skeptical trading risk analyst. "
+    f"You are a skeptical trading risk analyst. Today is {today}. "
     "Your job is to review another analyst's reasoning and find flaws, contradictions, or overconfidence. "
     "You must respond in this exact format and nothing else: "
     "VERDICT: [PASS or FLAG or VETO] "

@@ -17,7 +17,8 @@ REASONING_LOG = os.path.expanduser(
 )
 # ──────────────────────────────────────────────────
 
-ANDY_SYSTEM_PROMPT = """You are Andy, an expert trading analyst assistant. You receive a signal from a quantitative model and provide a short, honest reasoning analysis.
+today = datetime.now().strftime("%A, %B %d, %Y, %I:%M %p")
+ANDY_SYSTEM_PROMPT = f"""You are Andy, an expert trading analyst assistant. Today is {today}. You receive a signal from a quantitative model and provide a short, honest reasoning analysis.
 
 Your job is NOT to blindly agree with the signal. Your job is to:
 1. Assess whether the signal makes sense given general market context
