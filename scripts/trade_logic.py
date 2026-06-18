@@ -80,6 +80,32 @@ def print_decision(decision):
         print(f"  Critic verdict: {decision['verdict']}")
     print("---------------------\n")
 
+import csv
+
+DECISIONS_LOG = os.path.expanduser("~/trading-system/logs/decisions_log.csv")
+
+def get_latest_decision_row():
+    if not os.path.isfile(DECISIONS_LOG):
+        print("No decisions log found. Run critic.py first.")
+        return None
+    with open(DECISIONS_LOG, "r") as f:
+        rows = list(csv.DictReader(f))
+    if not rows:
+        print("Decisions log is empty.")
+        return None
+    return rows[-1]
+
+def run():
+    row = get_latest_decision_row()
+    if not row:
+        return
+    decision = make_trade_decision(
+        row["direction"],
+        row["signal_confidence_pct"],
+        row["last_close"],
+        row["critic_verdict"]
+    )
+    print_decision(decision)
+
 if __name__ == "__main__":
-    test_decision = make_trade_decision("DOWN", "90", "725.43", "FLAG")
-    print_decision(test_decision)
+    run()
