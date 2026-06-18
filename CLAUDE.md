@@ -17,6 +17,11 @@
 - `scripts/run_pipeline.sh` — Master pipeline script
 - `scripts/backtest.py` — Historical backtest script
 - `scripts/compare_ema_rsi.py` — EMA crossover vs Kronos comparison script
+- `scripts/kimi_reasoning.py` — Kimi K2 (via NVIDIA NIM) reasons about the signal as Analyst 2
+- `scripts/trade_logic.py` — Entry/exit decision engine: confidence floor, verdict-based position sizing, stop-loss/take-profit calculation
+- `scripts/alpaca_data.py` — Real-time SPY quotes and paper trading account info via Alpaca Markets
+- `scripts/fred_data.py` — Macro data (Fed Funds Rate, CPI, unemployment) via FRED API
+- `scripts/fear_greed.py` — CNN Fear and Greed Index sentiment data
 - `logs/signal_log.csv` — Live signal log
 - `logs/decisions_log.csv` — Andy + Critic decisions
 - `logs/pipeline.log` — Pipeline run log
@@ -48,7 +53,7 @@
 - Kronos fired DOWN at 90% confidence on June 5, 9, 10 during the same period
 - Concrete evidence multi-indicator approach beats single-condition strategy using live data
 - Script location: scripts/compare_ema_rsi.py
-- **Bring this to June 16 Phase 2 session as evidence**
+- Used as opening evidence in the June 16 Phase 2 session
 
 ## Live Signal Performance (June 2026)
 - **June 5:** DOWN 90% confidence, SPY $737.55 — correct call, sell-off confirmed
@@ -58,21 +63,32 @@
 - **June 12:** NEUTRAL, SPY $741.75 — RSI recovered to 53, MACD still bearish
 - Two market regimes captured: overbought grind (May) and active sell-off (June)
 
-## Phase 2 Architecture Decision (June 16)
+## Phase 2 Architecture — COMPLETED (June 16-17)
 - **Andy (Claude Haiku):** Analyst 1
-- **Kimi K2 via NVIDIA NIM:** Analyst 2 (free tier, model: moonshotai/kimi-k2)
+- **Kimi K2 via NVIDIA NIM:** Analyst 2 (free tier, model: moonshotai/kimi-k2.6)
 - **Endpoint:** https://integrate.api.nvidia.com/v1/chat/completions
-- **Critic:** Referee — reads both outputs, issues PASS/FLAG/VETO
-- Agreement between Andy and Kimi raises confidence
-- Disagreement triggers FLAG with Critic explaining which is more credible
-- Kimi needs second API call wired into pipeline routing both outputs to Critic
+- **Critic:** Referee — reads both outputs, issues PASS/FLAG/VETO, logs both reasonings to decisions_log.csv
+- Agreement between Andy and Kimi raises confidence toward PASS
+- Disagreement triggers FLAG with Critic explaining which analyst is more credible
+- Validated against June 10 historical signal: both analysts independently flagged the same 90%-confidence-vs-bullish-structure contradiction; Critic correctly synthesized into FLAG, HIGH confidence
+- Commits: cb82783 (Kimi wired in), aea8077 (trade_logic wired into pipeline)
 
-## Entry/Exit Logic (to build June 16)
+## Entry/Exit Logic — COMPLETED (scripts/trade_logic.py)
 - Long entry: MACD above signal + RSI < 70 + histogram positive + confidence > 51%
 - Short entry: Daily close below key support with MACD bearish + RSI bearish
-- Hard confidence floor: 51% minimum for any directional entry
-- Stop-loss: 2% below entry or price falls below MA50
-- Take-profit: RSI reaches 75+ or +3-5% from entry
+- Hard confidence floor: 51% minimum for any directional entry (checked independently of verdict)
+- Position sizing: VETO blocks entirely, FLAG = 0.5x size, PASS = 1x size
+- Stop-loss: 2% from entry (above for shorts, below for longs)
+- Take-profit: 3-5% from entry
+- **Stale-data protection added (commit aea8077):** checks latest decisions_log.csv timestamp matches today's date before acting; if signal is NEUTRAL or stale, reports NO TRADE instead of silently re-acting on an old decision
+- Tested against VETO, FLAG, and confidence-floor-block scenarios — all behave correctly
+
+## Macro and Sentiment Integration — COMPLETED (June 17)
+- Both andy_reasoning.py and kimi_reasoning.py now call get_macro_context() before building their prompts
+- Pulls Fed Funds Rate, CPI, unemployment from fred_data.py and CNN Fear & Greed score/rating from fear_greed.py
+- Wrapped in try/except per source so a FRED or CNN outage does not break the analyst's reasoning, just logs "data unavailable" for that piece
+- Commits: 10ba5f0 (Andy), fbe7e26 (Kimi)
+- Verified live: Fed Funds 3.63%, CPI 333.979, Unemployment 4.3% (all as of 2026-05-01), Fear & Greed 32.7 (fear) as of June 17
 
 ## Paper Trading Setup
 - **Platform:** Tradovate (sim account, $50,000 simulated equity)
@@ -81,22 +97,25 @@
 - **Margin per contract:** $1,328.50
 - **Position sizing:** 1-2 contracts per signal to start
 
-## APIs to Connect on June 16
-- **Alpaca Markets:** Free paper trading + real-time data API
-- **NVIDIA NIM:** Free API for Kimi K2. Account at build.nvidia.com
-- **FRED API:** Free macro data. Account at fred.stlouisfed.org
-- **CNN Fear and Greed Index:** No key needed. https://production.dataviz.cnn.io/index/fearandgreed/graphdata
+## APIs Connected — COMPLETED (June 16-17)
+- **Alpaca Markets:** Connected (scripts/alpaca_data.py). Paper account confirmed ACTIVE, $100,000 cash, $400,000 buying power. Real-time quotes working.
+- **NVIDIA NIM:** Connected (scripts/kimi_reasoning.py). Model moonshotai/kimi-k2.6.
+- **FRED API:** Connected (scripts/fred_data.py). Pulling FEDFUNDS, CPIAUCSL, UNRATE.
+- **CNN Fear and Greed Index:** Connected (scripts/fear_greed.py). Required full browser-style headers (User-Agent + Accept + Referer) to bypass a 418 bot-blocking error — bare User-Agent alone is not enough.
+- **.env now holds 5 keys:** ANTHROPIC_API_KEY, NVIDIA_API_KEY, ALPACA_API_KEY, ALPACA_SECRET_KEY, FRED_API_KEY
+- **SECURITY NOTE:** Anthropic and NVIDIA keys were exposed in full in a Claude.ai chat session on June 16. Peter made an informed decision not to rotate them (low perceived risk, personal project). Alpaca and FRED keys were never exposed (typed directly into nano).
 
 ## Architecture Roadmap
 1. ✅ Phase 0-3: Signal engine, Andy, Critic, dashboard running
 2. ✅ Backtest validated (57.8% SPY, 57.2% QQQ)
 3. ✅ Conflict detection and granular logging added
-4. 🔄 30-day live signal observation (May 16 - June 16)
-5. ⬜ Phase 2: Entry/exit logic, wire Kimi K2, connect APIs (June 16)
-6. ⬜ 30-day paper trading on Tradovate sim account
-7. ⬜ Live trading with $5,000-$10,000 capital on MES
-8. ⬜ Scale up, add QQQ, crypto, FOREX instruments
-9. ⬜ Semi-autopilot with Claude Code + Tradovate API executor
+4. ✅ 30-day live signal observation (May 16 - June 16) — captured two market regimes (overbought grind in May, active sell-off in June)
+5. ✅ Phase 2: Three-agent architecture, entry/exit logic, all four APIs connected, macro/sentiment feeding into both analysts (June 16-17)
+6. ⬜ Update run_pipeline.sh further if needed once paper trading begins (currently runs signal_logger → andy_reasoning → kimi_reasoning → critic → trade_logic → dashboard → auto_logger)
+7. ⬜ 30-day paper trading on Tradovate sim account
+8. ⬜ Live trading with $5,000-$10,000 capital on MES
+9. ⬜ Scale up, add QQQ, crypto, FOREX instruments
+10. ⬜ Semi-autopilot with Claude Code + Tradovate API executor
 
 ## Phase 3 Deferred Tasks
 - Add external signal sources one at a time, validate each independently
@@ -122,6 +141,21 @@ cd ~/trading-system && bash scripts/run_pipeline.sh
 
 # Run signal logger only
 cd ~/trading-system && python3 scripts/signal_logger.py
+
+# Run Kimi reasoning only (Analyst 2)
+cd ~/trading-system && python3 scripts/kimi_reasoning.py
+
+# Run trade logic only (reads latest decisions_log.csv row)
+cd ~/trading-system && python3 scripts/trade_logic.py
+
+# Check Alpaca account and live quote
+cd ~/trading-system && python3 scripts/alpaca_data.py
+
+# Check macro snapshot (FRED)
+cd ~/trading-system && python3 scripts/fred_data.py
+
+# Check Fear and Greed Index
+cd ~/trading-system && python3 scripts/fear_greed.py
 
 # Check last signal
 tail -3 ~/trading-system/logs/signal_log.csv
