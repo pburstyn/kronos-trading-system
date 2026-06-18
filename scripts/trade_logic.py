@@ -99,6 +99,15 @@ def run():
     row = get_latest_decision_row()
     if not row:
         return
+
+    row_date = row["timestamp"].split(" ")[0]
+    today_date = datetime.now().strftime("%Y-%m-%d")
+    if row_date != today_date:
+        print(f"\n-- Trade Decision --")
+        print(f"  NO TRADE: Latest decisions log entry is from {row_date}, not today ({today_date}). Stale data, skipping.")
+        print("---------------------\n")
+        return
+
     decision = make_trade_decision(
         row["direction"],
         row["signal_confidence_pct"],
