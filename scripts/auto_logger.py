@@ -5,53 +5,63 @@ from dotenv import load_dotenv
 
 load_dotenv(os.path.expanduser("~/trading-system/.env"))
 
-DECISIONS_LOG = os.path.expanduser(
-    "~/trading-system/logs/decisions_log.csv"
-)
-PAPER_TRADES_LOG = os.path.expanduser(
-    "~/trading-system/logs/paper_trades.csv"
-)
+DECISIONS_LOG = os.path.expanduser("~/trading-system/logs/decisions_log.csv")
+PAPER_TRADES_LOG = os.path.expanduser("~/trading-system/logs/paper_trades.csv")
+SIGNAL_LOG_PATH = os.path.expanduser("~/trading-system/logs/signal_log.csv")
+
+STOP_LOSS_PCT = 0.02
+TAKE_PROFIT_LOW_PCT = 0.03
+TAKE_PROFIT_HIGH_PCT = 0.05
+
+def calculate_levels(direction, entry_price):
+    entry = float(entry_price)
+    if direction == "UP":
+        stop_loss = round(entry * (1 - STOP_LOSS_PCT), 2)
+        take_profit_low = round(entry * (1 + TAKE_PROFIT_LOW_PCT), 2)
+        take_profit_high = round(entry * (1 + TAKE_PROFIT_HIGH_PCT), 2)
+    else:
+        stop_loss = round(entry * (1 + STOP_LOSS_PCT), 2)
+        take_profit_low = round(entry * (1 - TAKE_PROFIT_LOW_PCT), 2)
+        take_profit_high = round(entry * (1 - TAKE_PROFIT_HIGH_PCT), 2)
+    return stop_loss, take_profit_low, take_profit_high
 
 def get_latest_decision():
     if not os.path.isfile(DECISIONS_LOG):
         print("No decisions log found. Run critic.py first.")
         return None
-
     with open(DECISIONS_LOG, "r") as f:
         rows = list(csv.DictReader(f))
-
     if not rows:
         print("Decisions log is empty.")
         return None
-
     return rows[-1]
 
 def already_logged(timestamp):
     if not os.path.isfile(PAPER_TRADES_LOG):
         return False
-
     with open(PAPER_TRADES_LOG, "r") as f:
         rows = list(csv.DictReader(f))
-
     for row in rows:
         if row.get("signal_timestamp") == timestamp:
             return True
-
     return False
 
 def log_paper_trade(decision):
     os.makedirs(os.path.dirname(PAPER_TRADES_LOG), exist_ok=True)
-
     file_exists = os.path.isfile(PAPER_TRADES_LOG)
+    stop_loss, tp_low, tp_high = calculate_levels(
+        decision["direction"], decision["last_close"]
+    )
     with open(PAPER_TRADES_LOG, "a", newline="") as f:
         writer = csv.writer(f)
         if not file_exists:
             writer.writerow([
                 "signal_timestamp", "date_logged", "ticker",
                 "direction", "signal_confidence_pct",
-                "critic_verdict", "entry_price",
-                "exit_price", "shares", "pnl_dollars",
-                "pnl_pct", "notes"
+                "critic_verdict", "entry_price", "stop_loss",
+                "take_profit_low", "take_profit_high",
+                "exit_price", "exit_reason", "pnl_dollars",
+                "pnl_pct", "status", "notes"
             ])
         writer.writerow([
             decision["timestamp"],
@@ -61,19 +71,16 @@ def log_paper_trade(decision):
             decision["signal_confidence_pct"],
             decision["critic_verdict"],
             decision["last_close"],
-            "",
-            "",
-            "",
-            "",
-            "Auto-logged. Fill in exit price when trade closes."
+            stop_loss, tp_low, tp_high,
+            "", "", "", "",
+            "OPEN",
+            "Auto-logged."
         ])
-
-    print(f"Paper trade logged: {decision['ticker']} "
-          f"{decision['direction']} at ${decision['last_close']}")
+    print(f"Paper trade logged: {decision['ticker']} {decision['direction']} at ${decision['last_close']}")
+    print(f"  Stop-loss: ${stop_loss}")
+    print(f"  Take-profit: ${tp_low} - ${tp_high}")
+    print(f"  Status: OPEN")
     print(f"Saved to: {PAPER_TRADES_LOG}")
-    print("Fill in exit price manually when you close the trade.")
-
-SIGNAL_LOG_PATH = os.path.expanduser("~/trading-system/logs/signal_log.csv")
 
 def get_latest_signal_direction():
     if not os.path.isfile(SIGNAL_LOG_PATH):
@@ -93,20 +100,15 @@ def run():
     decision = get_latest_decision()
     if not decision:
         return
-
     verdict = decision.get("critic_verdict", "").strip()
     print(f"Verdict: {verdict}")
-
     if verdict != "PASS":
         print(f"Verdict is {verdict} — no paper trade logged.")
         return
-
     if already_logged(decision["timestamp"]):
         print("This signal was already logged. Skipping.")
         return
-
     log_paper_trade(decision)
 
 if __name__ == "__main__":
     run()
-
