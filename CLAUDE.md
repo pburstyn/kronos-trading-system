@@ -20,6 +20,7 @@
 - `scripts/kimi_reasoning.py` — Kimi K2 (via NVIDIA NIM) reasons about the signal as Analyst 2
 - `scripts/trade_logic.py` — Entry/exit decision engine: confidence floor, verdict-based position sizing, stop-loss/take-profit calculation
 - `scripts/alpaca_execute.py` — Places bracket paper orders on Alpaca when trade_logic.py says ENTER; checks for existing exposure before submitting; logs to logs/alpaca_orders.csv
+- `scripts/telegram_notify.py` — Sends Telegram message to Peter via @Peters_Open_Claw_Bot when pipeline fires an ENTER decision. Skips silently on NEUTRAL/VETO/stale signals. Reads botToken from openclaw.json, chat ID from .env (TELEGRAM_CHAT_ID).
 - `scripts/intraday_logger.py` — **Standalone, pipeline-independent.** Pulls SPY's last trade price from Alpaca and appends to logs/intraday_price_log.csv. Runs via cron every 15 min during market hours only (ET check inside script). Does not touch the trading pipeline in any way.
 - `scripts/alpaca_data.py` — Real-time SPY quotes and paper trading account info via Alpaca Markets
 - `scripts/fred_data.py` — Macro data (Fed Funds Rate, CPI, unemployment) via FRED API
@@ -107,6 +108,16 @@
 - **Two parallel outcome-tracking systems now exist:** (1) paper_trades.csv via auto_logger + outcome_tracker (simulated, daily-close based), (2) Alpaca bracket orders (actual fills managed by Alpaca). Both run on real SPY price action.
 - **30-day paper trading window:** begins on the next pipeline run that produces an ENTER decision.
 
+## Telegram Notifications — COMPLETED (June 20)
+- **Bot:** @Peters_Open_Claw_Bot (same bot OpenClaw/Andy uses). No new bot needed.
+- **Script:** `scripts/telegram_notify.py` — reads botToken from `/mnt/c/Users/openc/.openclaw/openclaw.json` (channels.telegram.botToken), reads Peter's personal chat ID from `.env` (TELEGRAM_CHAT_ID = 8344685831).
+- **Trigger:** ENTER decisions only (UP or DOWN with PASS or FLAG verdict, confidence ≥ 51%, today's date). Exits silently on NEUTRAL, VETO, or stale signal — never spams.
+- **Message includes:** direction, confidence, entry price, stop-loss, take-profit range, verdict, notional size ($1,000 PASS / $500 FLAG).
+- **Pipeline position:** after alpaca_execute.py (order is placed before notification fires): `trade_logic → alpaca_execute → telegram_notify → dashboard`
+- **Why chat ID is in .env, not openclaw.json:** openclaw.json's allowFrom field contained a stale group chat ID. Peter's personal Telegram user ID was obtained via @userinfobot and stored in .env so Kronos notifications are independent of OpenClaw's config.
+- **.env now holds 6 keys:** ANTHROPIC_API_KEY, NVIDIA_API_KEY, ALPACA_API_KEY, ALPACA_SECRET_KEY, FRED_API_KEY, TELEGRAM_CHAT_ID
+- **Tested:** Real message delivered successfully June 20 (message_id: 4).
+
 ## APIs Connected — COMPLETED (June 16-17)
 - **Alpaca Markets:** Connected (scripts/alpaca_data.py). Paper account confirmed ACTIVE, $100,000 cash, $400,000 buying power. Real-time quotes working.
 - **NVIDIA NIM:** Connected (scripts/kimi_reasoning.py). Model moonshotai/kimi-k2.6.
@@ -140,10 +151,11 @@
 7. ✅ Tradovate ruled out, Alpaca confirmed as paper trading platform (June 18) — see Paper Trading Setup section
 8. ✅ Alpaca execution script built (June 19) — scripts/alpaca_execute.py places bracket paper orders; wired into pipeline
 9. ✅ Position sizing decided (June 19) — PASS = $1,000 notional, FLAG = $500 notional, fractional shares
-10. ⬜ **NEXT: 30-day paper trading window** — begins on first ENTER signal after June 19; track start date when it fires
-11. ⬜ Live trading with $5,000-$10,000 capital on MES (after Alpaca validation proves out, requires funding live Tradovate)
-12. ⬜ Scale up, add QQQ, crypto, FOREX instruments
-13. ⬜ Semi-autopilot with Claude Code + broker API executor
+10. ✅ Telegram notifications built (June 20) — ENTER signals delivered to Peter's phone via @Peters_Open_Claw_Bot
+11. ⬜ **NEXT: 30-day paper trading window** — begins on first ENTER signal after June 20; track start date when it fires
+12. ⬜ Live trading with $5,000-$10,000 capital on MES (after Alpaca validation proves out, requires funding live Tradovate)
+13. ⬜ Scale up, add QQQ, crypto, FOREX instruments
+14. ⬜ Semi-autopilot with Claude Code + broker API executor
 
 ## Session Log — June 19, 2026 (First Claude Code Session)
 
@@ -219,6 +231,9 @@ cd ~/trading-system && python3 scripts/alpaca_execute.py
 
 # Check intraday price log (last 5 entries)
 tail -5 ~/trading-system/logs/intraday_price_log.csv
+
+# Check Alpaca paper orders placed
+cat ~/trading-system/logs/alpaca_orders.csv
 
 # Check Alpaca account and live quote
 cd ~/trading-system && python3 scripts/alpaca_data.py
