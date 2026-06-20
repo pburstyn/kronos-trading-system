@@ -20,6 +20,7 @@
 - `scripts/kimi_reasoning.py` — Kimi K2 (via NVIDIA NIM) reasons about the signal as Analyst 2
 - `scripts/trade_logic.py` — Entry/exit decision engine: confidence floor, verdict-based position sizing, stop-loss/take-profit calculation
 - `scripts/alpaca_execute.py` — Places bracket paper orders on Alpaca when trade_logic.py says ENTER; checks for existing exposure before submitting; logs to logs/alpaca_orders.csv
+- `scripts/intraday_logger.py` — **Standalone, pipeline-independent.** Pulls SPY's last trade price from Alpaca and appends to logs/intraday_price_log.csv. Runs via cron every 15 min during market hours only (ET check inside script). Does not touch the trading pipeline in any way.
 - `scripts/alpaca_data.py` — Real-time SPY quotes and paper trading account info via Alpaca Markets
 - `scripts/fred_data.py` — Macro data (Fed Funds Rate, CPI, unemployment) via FRED API
 - `scripts/fear_greed.py` — CNN Fear and Greed Index sentiment data
@@ -29,6 +30,8 @@
 - `logs/dashboard.html` — Visual dashboard
 - `logs/backtest_results.csv` — SPY backtest results
 - `logs/backtest_qqq.csv` — QQQ backtest results
+- `logs/intraday_price_log.csv` — SPY price sampled every 15 min during market hours (standalone, not pipeline)
+- `logs/alpaca_orders.csv` — Submitted Alpaca paper orders (order ID, direction, notional, stop/take-profit levels)
 
 ## Signal Engine Settings
 - **Ticker:** SPY
@@ -119,6 +122,14 @@
 - Wired into run_pipeline.sh immediately after auto_logger.py
 - Commit: a9fd30c
 
+## Intraday Price Collection — COMPLETED (June 19)
+- **Purpose:** Background data collection for future analysis — specifically, checking whether stop-loss/take-profit levels get hit and recovered intraday, which `outcome_tracker.py` (daily-close-only) cannot see.
+- **Script:** `scripts/intraday_logger.py` — pulls SPY last trade price via Alpaca `StockLatestTradeRequest`, appends `timestamp,price` to `logs/intraday_price_log.csv`.
+- **Market hours guard:** Script checks current ET time on every invocation; exits silently if outside 9:30 AM–4:00 PM ET or on a weekend.
+- **Cron:** `*/15 6-13 * * 1-5` (every 15 min, 6am–1:45pm PT weekdays). PT is always ET−3, so this window covers 9:00 AM–4:45 PM ET; the script's own ET check handles the precise cutoff. Stderr/stdout → `logs/intraday_price.log`.
+- **Isolation:** Completely separate from the trading pipeline. Does not read from or write to any pipeline log. Does not trigger any trade action. Safe to disable or delete without affecting signal generation, analyst reasoning, or order execution.
+- **Future use:** Once enough intraday data accumulates, can cross-reference against `paper_trades.csv` stop/take-profit levels to audit whether daily-close outcome_tracker.py is over- or under-counting wins/losses.
+
 ## Architecture Roadmap
 1. ✅ Phase 0-3: Signal engine, Andy, Critic, dashboard running
 2. ✅ Backtest validated (57.8% SPY, 57.2% QQQ)
@@ -171,6 +182,9 @@ cd ~/trading-system && python3 scripts/trade_logic.py
 
 # Run Alpaca execution only (dry-runs unless today's ENTER decision exists)
 cd ~/trading-system && python3 scripts/alpaca_execute.py
+
+# Check intraday price log (last 5 entries)
+tail -5 ~/trading-system/logs/intraday_price_log.csv
 
 # Check Alpaca account and live quote
 cd ~/trading-system && python3 scripts/alpaca_data.py
