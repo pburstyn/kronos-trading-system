@@ -12,6 +12,7 @@ python3 scripts/kimi_reasoning.py >> /home/pburstyn/trading-system/logs/pipeline
 python3 scripts/critic.py >> /home/pburstyn/trading-system/logs/pipeline.log 2>&1
 python3 scripts/trade_logic.py >> /home/pburstyn/trading-system/logs/pipeline.log 2>&1
 python3 scripts/alpaca_execute.py >> /home/pburstyn/trading-system/logs/pipeline.log 2>&1
+python3 scripts/telegram_notify.py >> /home/pburstyn/trading-system/logs/pipeline.log 2>&1
 python3 scripts/dashboard.py >> /home/pburstyn/trading-system/logs/pipeline.log 2>&1
 python3 scripts/auto_logger.py >> /home/pburstyn/trading-system/logs/pipeline.log 2>&1
 python3 scripts/outcome_tracker.py >> /home/pburstyn/trading-system/logs/pipeline.log 2>&1
