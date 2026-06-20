@@ -90,12 +90,15 @@
 - Commits: 10ba5f0 (Andy), fbe7e26 (Kimi)
 - Verified live: Fed Funds 3.63%, CPI 333.979, Unemployment 4.3% (all as of 2026-05-01), Fear & Greed 32.7 (fear) as of June 17
 
-## Paper Trading Setup
-- **Platform:** Tradovate (sim account, $50,000 simulated equity)
-- **Instrument:** MESM6 (expires 06/18/2026), roll to MESU6 after expiry
-- **Value per point:** $5.00 USD
-- **Margin per contract:** $1,328.50
-- **Position sizing:** 1-2 contracts per signal to start
+## Paper Trading Setup — REVISED (June 18-19)
+- **DECISION: Using Alpaca, not Tradovate, for the 30-day paper trading validation.**
+- **Why Tradovate was ruled out:** API access requires a LIVE, funded account ($1,000+ minimum) plus a paid $25/month API Access Add-on. Sim/demo accounts get NO API access at all — confirmed via Tradovate's own docs and forum. The existing $50,000 sim account (MESM6 contract) cannot be connected to via API in any form.
+- **Why TradingView was also ruled out:** No public data/execution API. Trades aren't executed by TradingView natively — would require rewriting signal logic in Pine Script plus a paid third-party bridge (TradersPost/PickMyTrade), which still needs a connected broker underneath, putting us back at square one.
+- **Platform:** Alpaca Markets (already connected, free, paper account confirmed ACTIVE — see APIs Connected section)
+- **Instrument:** SPY shares (not MES futures)
+- **Accuracy tradeoff accepted:** signal generation, entry/stop/take-profit price levels, and win/loss outcomes will all be equally valid on Alpaca since they're based on real SPY price action. What will NOT be tested: futures leverage (~10:1 vs SPY's 1:1/4:1), overnight/weekend gap behavior, and contract rolling (MESM6→MESU6). Revisit funding live Tradovate ONLY after Kronos proves out on Alpaca.
+- **STILL TO BUILD:** the actual execution script that takes a trade_logic.py ENTER decision and submits a real paper order to Alpaca (alpaca-py is already installed and authenticated, just not wired to place orders yet)
+- **STILL TO DECIDE:** how Critic-verdict position sizing (0.5x FLAG / 1x PASS) maps to an actual SPY share count or dollar amount — needs explicit decision with Peter, not an assumed default
 
 ## APIs Connected — COMPLETED (June 16-17)
 - **Alpaca Markets:** Connected (scripts/alpaca_data.py). Paper account confirmed ACTIVE, $100,000 cash, $400,000 buying power. Real-time quotes working.
@@ -105,17 +108,31 @@
 - **.env now holds 5 keys:** ANTHROPIC_API_KEY, NVIDIA_API_KEY, ALPACA_API_KEY, ALPACA_SECRET_KEY, FRED_API_KEY
 - **SECURITY NOTE:** Anthropic and NVIDIA keys were exposed in full in a Claude.ai chat session on June 16. Peter made an informed decision not to rotate them (low perceived risk, personal project). Alpaca and FRED keys were never exposed (typed directly into nano).
 
+## Outcome Tracking — COMPLETED (June 18)
+- **scripts/auto_logger.py rewritten:** now calculates and stores stop_loss, take_profit_low, take_profit_high at the moment a trade is logged (status=OPEN). New paper_trades.csv columns: stop_loss, take_profit_low, take_profit_high, exit_reason, status.
+- **scripts/outcome_tracker.py (NEW FILE):** runs daily, checks all OPEN trades against current SPY closing price via yfinance, auto-closes any trade that hit its stop-loss or take-profit, calculates pnl_dollars/pnl_pct, flips status to CLOSED. Leaves unresolved trades OPEN with unrealized PnL printed.
+- **LIMITATION:** checks daily closing price only, not intraday — a stop-loss hit and recovered intraday won't be caught. Possible future upgrade via Alpaca intraday data if this proves too loose.
+- Wired into run_pipeline.sh immediately after auto_logger.py
+- Commit: a9fd30c
+
 ## Architecture Roadmap
 1. ✅ Phase 0-3: Signal engine, Andy, Critic, dashboard running
 2. ✅ Backtest validated (57.8% SPY, 57.2% QQQ)
 3. ✅ Conflict detection and granular logging added
 4. ✅ 30-day live signal observation (May 16 - June 16) — captured two market regimes (overbought grind in May, active sell-off in June)
 5. ✅ Phase 2: Three-agent architecture, entry/exit logic, all four APIs connected, macro/sentiment feeding into both analysts (June 16-17)
-6. ⬜ Update run_pipeline.sh further if needed once paper trading begins (currently runs signal_logger → andy_reasoning → kimi_reasoning → critic → trade_logic → dashboard → auto_logger)
-7. ⬜ 30-day paper trading on Tradovate sim account
-8. ⬜ Live trading with $5,000-$10,000 capital on MES
-9. ⬜ Scale up, add QQQ, crypto, FOREX instruments
-10. ⬜ Semi-autopilot with Claude Code + Tradovate API executor
+6. ✅ Outcome tracking built (June 18) — paper trades now auto-resolve win/loss instead of requiring manual exit-price entry
+7. ✅ Tradovate ruled out, Alpaca confirmed as paper trading platform (June 18) — see Paper Trading Setup section
+8. ⬜ **NEXT TASK: build Alpaca execution script** — trade_logic.py currently only calculates/prints ENTER decisions, does not place real paper orders yet
+9. ⬜ Decide position-sizing → share-count mapping (0.5x/1x → actual SPY shares or dollar amount)
+10. ⬜ 30-day paper trading on Alpaca begins once execution script is live
+11. ⬜ Live trading with $5,000-$10,000 capital on MES (after Alpaca validation proves out, requires funding live Tradovate)
+12. ⬜ Scale up, add QQQ, crypto, FOREX instruments
+13. ⬜ Semi-autopilot with Claude Code + broker API executor
+
+## Account Note (June 19)
+- Peter upgraded to Claude Pro. Plan to use Claude Code (now included) for hands-on coding sessions on this repo going forward, pointing it at this CLAUDE.md file plus the Google Doc session logs (Parts 1-3, in Drive folder linked from CLAUDE.md context) for full context at the start of any session. This chat interface remains primary for planning/research/decisions; Claude Code is for direct file editing and running commands in this repo.
+- Sofia/AssetAndOak projects placed on hold — Peter is focusing on Kronos exclusively for now.
 
 ## Phase 3 Deferred Tasks
 - Add external signal sources one at a time, validate each independently
