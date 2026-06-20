@@ -145,9 +145,43 @@
 12. ⬜ Scale up, add QQQ, crypto, FOREX instruments
 13. ⬜ Semi-autopilot with Claude Code + broker API executor
 
-## Account Note (June 19)
-- Peter upgraded to Claude Pro. Plan to use Claude Code (now included) for hands-on coding sessions on this repo going forward, pointing it at this CLAUDE.md file plus the Google Doc session logs (Parts 1-3, in Drive folder linked from CLAUDE.md context) for full context at the start of any session. This chat interface remains primary for planning/research/decisions; Claude Code is for direct file editing and running commands in this repo.
-- Sofia/AssetAndOak projects placed on hold — Peter is focusing on Kronos exclusively for now.
+## Session Log — June 19, 2026 (First Claude Code Session)
+
+**Context:** Peter upgraded to Claude Pro (which includes Claude Code). This was the first hands-on coding session done entirely inside Claude Code (VS Code/WSL terminal) rather than the claude.ai chat interface. Claude Code reads this CLAUDE.md plus the Google Doc session logs for context at the start of each session. The chat interface remains primary for planning/research/decisions; Claude Code is for direct file editing and running commands in the repo.
+
+**Session goals coming in:** Build the Alpaca execution script (marked as next task in CLAUDE.md and Part 3 Google Doc), then anything else that makes sense.
+
+**What was built:**
+
+1. **scripts/alpaca_execute.py** (commit 58504f2)
+   - Reads today's decision from decisions_log.csv (same staleness guard as trade_logic.py)
+   - If ENTER: checks Alpaca for existing SPY position or open orders (no stacking), then submits a GTC bracket order — market entry + stop-loss stop order + take-profit limit order
+   - Position sizing decided in session: PASS = $1,000 notional, FLAG = $500 notional; fractional shares (qty = notional / last_close)
+   - Logs submitted orders to logs/alpaca_orders.csv (order ID, direction, notional, qty, levels, verdict)
+   - Wired into run_pipeline.sh immediately after trade_logic.py
+   - Stop/take-profit directions verified correct for both long (UP) and short (DOWN): for shorts, stop is above entry, take-profit is below; Alpaca bracket order handles leg sides automatically based on parent order side
+   - Tested: with no ENTER signal today (NEUTRAL day, stale decisions_log.csv), correctly prints SKIP and exits without touching Alpaca
+
+2. **scripts/intraday_logger.py** (commit 49a06f3)
+   - Completely separate from the trading pipeline — does not read or write any pipeline file
+   - Pulls SPY last trade price via Alpaca StockLatestTradeRequest (actual trade price, not bid/ask)
+   - Checks current ET time on every invocation; exits silently if outside 9:30 AM–4:00 PM ET or weekend
+   - Appends timestamp,price to logs/intraday_price_log.csv
+   - Cron: `*/15 6-13 * * 1-5` (every 15 min, 6am–1:45pm PT on weekdays). All paths are absolute in crontab so no cwd dependency.
+   - Motivation: outcome_tracker.py only checks daily closing prices; intraday data will let us audit whether stop-losses get hit and recover intraday (i.e., whether the daily-close approximation is too loose). Data collection starts Monday.
+   - Tested: market-hours guard fires correctly (correctly skipped at 5pm PT); force-tested CSV write path separately, confirmed SPY $748.46 logged to correct file.
+
+**Decisions made:**
+- Position sizing: $1,000 for PASS, $500 for FLAG (Peter chose fixed-dollar over fixed-share-count or pct-of-portfolio)
+- Intraday collection: standalone cron, not wired into pipeline, to keep pipeline unchanged and data collection independent
+
+**State at end of session:**
+- All Phase 2 + Phase 3 infrastructure is complete
+- 30-day paper trading window begins on the next pipeline run that fires an ENTER decision (first directional signal with ≥51% confidence and PASS or FLAG verdict after June 19)
+- Intraday price collection begins Monday morning (first weekday market open after June 19)
+- Nothing blocking; no open code tasks
+
+**Sofia/AssetAndOak projects placed on hold** — Peter is focusing on Kronos exclusively for now.
 
 ## Phase 3 Deferred Tasks
 - Add external signal sources one at a time, validate each independently
@@ -209,5 +243,5 @@ cd ~/trading-system && source venv/bin/activate && bash scripts/run_pipeline.sh
 ```
 
 ## Last Updated
-2026-06-19 18:00:08
+2026-06-19 23:10:00 (end of June 19 Claude Code session)
 **Last Signal:** 2026-06-19 18:00:04,SPY,NEUTRAL,0.0,746.74,Price $746.74 above MA50 $727.82 and MA200 $684.49: bullish structure | RSI 55.1: bullish | MACD below signal: bearish | MACD histogram neutral: no vote | VERDICT: NEUTRAL — bull_votes=1 bear_votes=1 did not meet MIN_VOTES=3
