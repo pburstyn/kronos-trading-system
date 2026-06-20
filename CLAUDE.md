@@ -19,6 +19,7 @@
 - `scripts/compare_ema_rsi.py` — EMA crossover vs Kronos comparison script
 - `scripts/kimi_reasoning.py` — Kimi K2 (via NVIDIA NIM) reasons about the signal as Analyst 2
 - `scripts/trade_logic.py` — Entry/exit decision engine: confidence floor, verdict-based position sizing, stop-loss/take-profit calculation
+- `scripts/alpaca_execute.py` — Places bracket paper orders on Alpaca when trade_logic.py says ENTER; checks for existing exposure before submitting; logs to logs/alpaca_orders.csv
 - `scripts/alpaca_data.py` — Real-time SPY quotes and paper trading account info via Alpaca Markets
 - `scripts/fred_data.py` — Macro data (Fed Funds Rate, CPI, unemployment) via FRED API
 - `scripts/fear_greed.py` — CNN Fear and Greed Index sentiment data
@@ -97,8 +98,11 @@
 - **Platform:** Alpaca Markets (already connected, free, paper account confirmed ACTIVE — see APIs Connected section)
 - **Instrument:** SPY shares (not MES futures)
 - **Accuracy tradeoff accepted:** signal generation, entry/stop/take-profit price levels, and win/loss outcomes will all be equally valid on Alpaca since they're based on real SPY price action. What will NOT be tested: futures leverage (~10:1 vs SPY's 1:1/4:1), overnight/weekend gap behavior, and contract rolling (MESM6→MESU6). Revisit funding live Tradovate ONLY after Kronos proves out on Alpaca.
-- **STILL TO BUILD:** the actual execution script that takes a trade_logic.py ENTER decision and submits a real paper order to Alpaca (alpaca-py is already installed and authenticated, just not wired to place orders yet)
-- **STILL TO DECIDE:** how Critic-verdict position sizing (0.5x FLAG / 1x PASS) maps to an actual SPY share count or dollar amount — needs explicit decision with Peter, not an assumed default
+- **Execution script BUILT (June 19):** scripts/alpaca_execute.py — places bracket orders (market entry + stop-loss stop + take-profit limit) via alpaca-py. Wired into run_pipeline.sh after trade_logic.py.
+- **Position sizing DECIDED (June 19):** PASS = $1,000 notional, FLAG = $500 notional. Fractional shares used (qty = notional / last_close). Alpaca handles fractional share execution.
+- **Order type:** GTC bracket order. Stop-loss and take-profit legs stay active until triggered. Script skips if an existing SPY position or open order is already present (no stacking).
+- **Two parallel outcome-tracking systems now exist:** (1) paper_trades.csv via auto_logger + outcome_tracker (simulated, daily-close based), (2) Alpaca bracket orders (actual fills managed by Alpaca). Both run on real SPY price action.
+- **30-day paper trading window:** begins on the next pipeline run that produces an ENTER decision.
 
 ## APIs Connected — COMPLETED (June 16-17)
 - **Alpaca Markets:** Connected (scripts/alpaca_data.py). Paper account confirmed ACTIVE, $100,000 cash, $400,000 buying power. Real-time quotes working.
@@ -123,9 +127,9 @@
 5. ✅ Phase 2: Three-agent architecture, entry/exit logic, all four APIs connected, macro/sentiment feeding into both analysts (June 16-17)
 6. ✅ Outcome tracking built (June 18) — paper trades now auto-resolve win/loss instead of requiring manual exit-price entry
 7. ✅ Tradovate ruled out, Alpaca confirmed as paper trading platform (June 18) — see Paper Trading Setup section
-8. ⬜ **NEXT TASK: build Alpaca execution script** — trade_logic.py currently only calculates/prints ENTER decisions, does not place real paper orders yet
-9. ⬜ Decide position-sizing → share-count mapping (0.5x/1x → actual SPY shares or dollar amount)
-10. ⬜ 30-day paper trading on Alpaca begins once execution script is live
+8. ✅ Alpaca execution script built (June 19) — scripts/alpaca_execute.py places bracket paper orders; wired into pipeline
+9. ✅ Position sizing decided (June 19) — PASS = $1,000 notional, FLAG = $500 notional, fractional shares
+10. ⬜ **NEXT: 30-day paper trading window** — begins on first ENTER signal after June 19; track start date when it fires
 11. ⬜ Live trading with $5,000-$10,000 capital on MES (after Alpaca validation proves out, requires funding live Tradovate)
 12. ⬜ Scale up, add QQQ, crypto, FOREX instruments
 13. ⬜ Semi-autopilot with Claude Code + broker API executor
@@ -164,6 +168,9 @@ cd ~/trading-system && python3 scripts/kimi_reasoning.py
 
 # Run trade logic only (reads latest decisions_log.csv row)
 cd ~/trading-system && python3 scripts/trade_logic.py
+
+# Run Alpaca execution only (dry-runs unless today's ENTER decision exists)
+cd ~/trading-system && python3 scripts/alpaca_execute.py
 
 # Check Alpaca account and live quote
 cd ~/trading-system && python3 scripts/alpaca_data.py
