@@ -7,6 +7,7 @@ source /home/pburstyn/trading-system/venv/bin/activate
 echo "$(date) — Pipeline starting" >> /home/pburstyn/trading-system/logs/pipeline.log
 
 python3 scripts/signal_logger.py >> /home/pburstyn/trading-system/logs/pipeline.log 2>&1
+python3 scripts/news_context.py >> /home/pburstyn/trading-system/logs/pipeline.log 2>&1
 python3 scripts/andy_reasoning.py >> /home/pburstyn/trading-system/logs/pipeline.log 2>&1
 python3 scripts/kimi_reasoning.py >> /home/pburstyn/trading-system/logs/pipeline.log 2>&1
 python3 scripts/critic.py >> /home/pburstyn/trading-system/logs/pipeline.log 2>&1

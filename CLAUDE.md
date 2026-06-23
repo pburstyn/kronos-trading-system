@@ -20,6 +20,7 @@
 - `scripts/kimi_reasoning.py` — Kimi K2 (via NVIDIA NIM) reasons about the signal as Analyst 2
 - `scripts/trade_logic.py` — Entry/exit decision engine: confidence floor, verdict-based position sizing, stop-loss/take-profit calculation
 - `scripts/alpaca_execute.py` — Places bracket paper orders on Alpaca when trade_logic.py says ENTER; checks for existing exposure before submitting; logs to logs/alpaca_orders.csv
+- `scripts/news_context.py` — Fetches today's top financial headlines via Alpaca News API (no new key needed — uses existing ALPACA_API_KEY). Filters by keywords (Fed, inflation, oil, Iran, earnings, S&P, interest rate, etc.). Caches to logs/news_cache.json. Andy and Kimi call get_news_context() to read from cache — API called once per pipeline run.
 - `scripts/telegram_notify.py` — Sends Telegram message to Peter via @Peters_Open_Claw_Bot when pipeline fires an ENTER decision. Skips silently on NEUTRAL/VETO/stale signals. Reads botToken from openclaw.json, chat ID from .env (TELEGRAM_CHAT_ID).
 - `scripts/intraday_logger.py` — **Standalone, pipeline-independent.** Pulls SPY's last trade price from Alpaca and appends to logs/intraday_price_log.csv. Runs via cron every 15 min during market hours only (ET check inside script). Does not touch the trading pipeline in any way.
 - `scripts/alpaca_data.py` — Real-time SPY quotes and paper trading account info via Alpaca Markets
@@ -31,6 +32,7 @@
 - `logs/dashboard.html` — Visual dashboard
 - `logs/backtest_results.csv` — SPY backtest results
 - `logs/backtest_qqq.csv` — QQQ backtest results
+- `logs/news_cache.json` — Daily financial headlines cache written by news_context.py, read by andy and kimi
 - `logs/intraday_price_log.csv` — SPY price sampled every 15 min during market hours (standalone, not pipeline)
 - `logs/alpaca_orders.csv` — Submitted Alpaca paper orders (order ID, direction, notional, stop/take-profit levels)
 
@@ -87,6 +89,15 @@
 - Take-profit: 3-5% from entry
 - **Stale-data protection added (commit aea8077):** checks latest decisions_log.csv timestamp matches today's date before acting; if signal is NEUTRAL or stale, reports NO TRADE instead of silently re-acting on an old decision
 - Tested against VETO, FLAG, and confidence-floor-block scenarios — all behave correctly
+
+## News Context Integration — COMPLETED (June 22)
+- **Source:** Alpaca News API (Benzinga articles) — uses existing ALPACA_API_KEY/ALPACA_SECRET_KEY, no new key needed.
+- **Script:** `scripts/news_context.py` — fetches last 24h of news tagged to SPY/QQQ/GLD/USO/TLT, filters client-side by keywords (fed, inflation, oil, iran, earnings, s&p, interest rate, fomc, gdp, recession, tariff, treasury), keeps top 10, writes to `logs/news_cache.json`.
+- **Cache pattern:** `news_context.py` runs once in pipeline (before andy_reasoning.py) and writes the cache. Both `andy_reasoning.py` and `kimi_reasoning.py` import `get_news_context()` which reads from the cache — Alpaca API called exactly once per pipeline run.
+- **Prompt placement:** Added as a separate block after the existing macro/sentiment context in both analysts' prompts.
+- **Failure handling:** `run()` in news_context.py wraps fetch in try/except — a failure logs WARNING but never aborts the pipeline. `get_news_context()` returns a graceful "unavailable" string if cache is missing or stale.
+- **Pipeline order:** `signal_logger → news_context → andy_reasoning → kimi_reasoning → ...`
+- **Tested:** 10 headlines fetched and cached on June 22 including Fed testimony, Iran/Strait of Hormuz, oil drilling, September rate hike warning.
 
 ## Macro and Sentiment Integration — COMPLETED (June 17)
 - Both andy_reasoning.py and kimi_reasoning.py now call get_macro_context() before building their prompts

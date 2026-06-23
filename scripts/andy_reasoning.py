@@ -9,6 +9,7 @@ from dotenv import load_dotenv
 sys.path.insert(0, os.path.expanduser("~/trading-system/scripts"))
 from fred_data import get_macro_snapshot
 from fear_greed import get_fear_greed
+from news_context import get_news_context
 
 # Load API key from .env file
 load_dotenv(os.path.expanduser("~/trading-system/.env"))
@@ -83,7 +84,8 @@ def ask_andy(signal):
         f"{votes}\n\n"
         "Macro and sentiment context:\n"
         f"{macro_context}\n\n"
-        "Please provide your reasoning analysis based on these specific indicators, factoring in the macro and sentiment context where relevant."
+        f"{get_news_context()}\n\n"
+        "Please provide your reasoning analysis based on these specific indicators, factoring in the macro context, sentiment, and today's news where relevant."
     )
 
     message = client.messages.create(
