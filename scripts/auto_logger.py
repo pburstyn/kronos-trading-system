@@ -1,9 +1,13 @@
 import csv
 import os
+import sys
 from datetime import datetime
 from dotenv import load_dotenv
 
 load_dotenv(os.path.expanduser("~/trading-system/.env"))
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from trade_logic import extract_verdict
 
 DECISIONS_LOG = os.path.expanduser("~/trading-system/logs/decisions_log.csv")
 PAPER_TRADES_LOG = os.path.expanduser("~/trading-system/logs/paper_trades.csv")
@@ -100,10 +104,10 @@ def run():
     decision = get_latest_decision()
     if not decision:
         return
-    verdict = decision.get("critic_verdict", "").strip()
+    verdict = extract_verdict(decision)
     print(f"Verdict: {verdict}")
-    if verdict != "PASS":
-        print(f"Verdict is {verdict} — no paper trade logged.")
+    if verdict not in ("PASS", "FLAG"):
+        print(f"Verdict is '{verdict}' — no paper trade logged.")
         return
     if already_logged(decision["timestamp"]):
         print("This signal was already logged. Skipping.")

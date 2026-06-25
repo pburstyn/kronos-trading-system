@@ -5,7 +5,7 @@ from datetime import datetime
 from dotenv import load_dotenv
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from trade_logic import get_latest_decision_row, make_trade_decision
+from trade_logic import get_latest_decision_row, make_trade_decision, extract_verdict
 
 load_dotenv(os.path.expanduser("~/trading-system/.env"))
 
@@ -122,7 +122,7 @@ def run():
         row["direction"],
         row["signal_confidence_pct"],
         row["last_close"],
-        row["critic_verdict"]
+        extract_verdict(row)
     )
 
     if decision["action"] != "ENTER":

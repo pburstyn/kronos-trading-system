@@ -7,6 +7,16 @@ TAKE_PROFIT_PCT_LOW = 0.03
 TAKE_PROFIT_PCT_HIGH = 0.05
 MIN_CONFIDENCE_FOR_ENTRY = 51.0
 
+def extract_verdict(row):
+    """Return clean PASS/FLAG/VETO from a decisions_log row.
+    Checks both critic_verdict and critic_reason to handle the column
+    format change where the clean keyword moved to critic_reason."""
+    for field in ("critic_verdict", "critic_reason"):
+        val = row.get(field, "").strip()
+        if val in ("PASS", "FLAG", "VETO"):
+            return val
+    return ""
+
 def get_position_size(verdict):
     if verdict == "VETO":
         return 0
@@ -112,7 +122,7 @@ def run():
         row["direction"],
         row["signal_confidence_pct"],
         row["last_close"],
-        row["critic_verdict"]
+        extract_verdict(row)
     )
     print_decision(decision)
 
