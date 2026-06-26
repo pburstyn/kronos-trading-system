@@ -23,6 +23,7 @@
 - `scripts/news_context.py` — Fetches today's top financial headlines via Alpaca News API (no new key needed — uses existing ALPACA_API_KEY). Filters by keywords (Fed, inflation, oil, Iran, earnings, S&P, interest rate, etc.). Caches to logs/news_cache.json. Andy and Kimi call get_news_context() to read from cache — API called once per pipeline run.
 - `scripts/telegram_notify.py` — Sends Telegram message to Peter via @Peters_Open_Claw_Bot when pipeline fires an ENTER decision. Skips silently on NEUTRAL/VETO/stale signals. Reads botToken from openclaw.json, chat ID from .env (TELEGRAM_CHAT_ID).
 - `scripts/intraday_logger.py` — **Standalone, pipeline-independent.** Pulls SPY's last trade price from Alpaca and appends to logs/intraday_price_log.csv. Runs via cron every 15 min during market hours only (ET check inside script). Does not touch the trading pipeline in any way.
+- `scripts/andy_health.py` — **Standalone, pipeline-independent.** Checks if OpenClaw (Andy) is reachable on port 18789 via powershell.exe Test-NetConnection. Sends Telegram alert only on status change (UP→DOWN or DOWN→UP). State tracked in logs/andy_status.json. Runs every 30 min 24/7 via cron. Logs to logs/andy_health.log.
 - `scripts/alpaca_data.py` — Real-time SPY quotes and paper trading account info via Alpaca Markets
 - `scripts/fred_data.py` — Macro data (Fed Funds Rate, CPI, unemployment) via FRED API
 - `scripts/fear_greed.py` — CNN Fear and Greed Index sentiment data
@@ -35,6 +36,8 @@
 - `logs/news_cache.json` — Daily financial headlines cache written by news_context.py, read by andy and kimi
 - `logs/intraday_price_log.csv` — SPY price sampled every 15 min during market hours (standalone, not pipeline)
 - `logs/alpaca_orders.csv` — Submitted Alpaca paper orders (order ID, direction, notional, stop/take-profit levels)
+- `logs/andy_status.json` — Last known Andy health status (UP/DOWN) and timestamp; used by andy_health.py to suppress duplicate alerts
+- `logs/andy_health.log` — Andy health check log (appended by cron every 30 min)
 
 ## Signal Engine Settings
 - **Ticker:** SPY
@@ -145,6 +148,16 @@
 - Wired into run_pipeline.sh immediately after auto_logger.py
 - Commit: a9fd30c
 
+## Andy Health Monitor — COMPLETED (June 25)
+- **Script:** `scripts/andy_health.py` — checks if OpenClaw is reachable at localhost:18789 using `powershell.exe Test-NetConnection` (WSL2 cannot reach Windows localhost directly via TCP; must use powershell.exe subprocess).
+- **Alert logic:** Sends Telegram alert only on status change — DOWN alert when UP→DOWN, recovery alert when DOWN→UP. Silent on repeated same status (no alert spam every 30 min).
+- **First-run fix:** On first run (no status file), `last_status=None`. Only the DOWN alert fires if Andy is down; the "back UP" message is guarded by `elif last_status == "DOWN"` so it never fires falsely when there's no prior state.
+- **State file:** `logs/andy_status.json` — stores `{"status": "UP"/"DOWN", "last_checked": "..."}`. Persists across cron runs.
+- **Cron:** `*/30 * * * *` — every 30 minutes, all hours, all days (no market-hours restriction; Andy should be up whenever you want to trade). Full absolute path with venv python, stderr+stdout → `logs/andy_health.log`.
+- **Telegram config:** Same pattern as telegram_notify.py — botToken from openclaw.json, TELEGRAM_CHAT_ID from .env.
+- **DOWN alert message:** `"ALERT: Andy (OpenClaw) is DOWN as of {now}.\nStart gateway.cmd in PowerShell to bring him back up."`
+- **Tested:** First run with no prior status file → correctly sent DOWN alert (Andy genuinely down). Second run → no duplicate alert. Fix verified.
+
 ## Intraday Price Collection — COMPLETED (June 19)
 - **Purpose:** Background data collection for future analysis — specifically, checking whether stop-loss/take-profit levels get hit and recovered intraday, which `outcome_tracker.py` (daily-close-only) cannot see.
 - **Script:** `scripts/intraday_logger.py` — pulls SPY last trade price via Alpaca `StockLatestTradeRequest`, appends `timestamp,price` to `logs/intraday_price_log.csv`.
@@ -164,7 +177,8 @@
 8. ✅ Alpaca execution script built (June 19) — scripts/alpaca_execute.py places bracket paper orders; wired into pipeline
 9. ✅ Position sizing decided (June 19) — PASS = $1,000 notional, FLAG = $500 notional, fractional shares
 10. ✅ Telegram notifications built (June 20) — ENTER signals delivered to Peter's phone via @Peters_Open_Claw_Bot
-11. ⬜ **NEXT: 30-day paper trading window** — begins on first ENTER signal after June 20; track start date when it fires
+11. ✅ Andy health monitor built (June 25) — scripts/andy_health.py checks port 18789 every 30 min, sends Telegram alert on DOWN/recovery
+12. ⬜ **NEXT: 30-day paper trading window** — begins on first ENTER signal after June 20; track start date when it fires
 12. ⬜ Live trading with $5,000-$10,000 capital on MES (after Alpaca validation proves out, requires funding live Tradovate)
 13. ⬜ Scale up, add QQQ, crypto, FOREX instruments
 14. ⬜ Semi-autopilot with Claude Code + broker API executor
@@ -246,6 +260,12 @@ tail -5 ~/trading-system/logs/intraday_price_log.csv
 
 # Check Alpaca paper orders placed
 cat ~/trading-system/logs/alpaca_orders.csv
+
+# Check Andy health manually
+cd ~/trading-system && python3 scripts/andy_health.py
+
+# View Andy health log (last 20 entries)
+tail -20 ~/trading-system/logs/andy_health.log
 
 # Check Alpaca account and live quote
 cd ~/trading-system && python3 scripts/alpaca_data.py
