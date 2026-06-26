@@ -48,6 +48,7 @@
 - **Conflict detection added (June 13 2026):** RSI overbought (>70) now hard-vetoes any UP signal regardless of other votes. Logs VERDICT: CONFLICT line explaining the override.
 - **Granular verdict logging added (June 13 2026):** Every NEUTRAL outcome now logs VERDICT line showing bull_votes, bear_votes, and why MIN_VOTES was not met.
 - **Commit:** 02acec3 — "Add conflict detection and granular verdict logging"
+- **Verdict parsing bug fixed (June 24 2026):** decisions_log.csv column format changed — critic_verdict now holds full analysis text; clean FLAG/PASS/VETO keyword moved to critic_reason. All four downstream scripts (trade_logic, auto_logger, alpaca_execute, telegram_notify) were reading the wrong field and doing exact equality checks, silently dropping all signals. Fixed by adding extract_verdict(row) to trade_logic.py that checks both fields in order. auto_logger.py also had a separate bug: hardcoded `verdict == "PASS"` that ignored FLAG entirely — fixed to `verdict not in ("PASS", "FLAG")`. Commit: 61cd97f.
 
 ## Backtest Results (run May 2026)
 - **SPY:** 57.8% accuracy, 282 signals fired, 646 days analyzed (2023-01-01 to present)
