@@ -158,6 +158,15 @@
 - **DOWN alert message:** `"ALERT: Andy (OpenClaw) is DOWN as of {now}.\nStart gateway.cmd in PowerShell to bring him back up."`
 - **Tested:** First run with no prior status file → correctly sent DOWN alert (Andy genuinely down). Second run → no duplicate alert. Fix verified.
 
+## Andy Auto-Restart (Windows Task Scheduler) — COMPLETED (June 25)
+- **Problem:** OpenClaw had an existing "OpenClaw Gateway" task (installed by OpenClaw itself) but with `RestartCount: 0` (no restart on crash) and a 72-hour execution time limit that would kill Andy every 3 days.
+- **Wrapper script:** `C:\Users\openc\.openclaw\start_andy_loop.bat` — runs a port-check loop: if port 18789 is already LISTENING (Andy is up), waits 30 seconds and checks again. If port is free, starts `gateway.cmd` and monitors it. When gateway.cmd exits, waits 15 seconds and tries again. This handles crashes at the node.exe level.
+- **Scheduled task:** `Kronos-Andy-Autostart` in Windows Task Scheduler. Trigger: at login for user `openc`. RestartCount: 10, RestartInterval: 2 min, ExecutionTimeLimit: 0 (unlimited), MultipleInstances: IgnoreNew, StartWhenAvailable: true. This is belt-and-suspenders on top of the wrapper loop — if the CMD process itself is killed, Task Scheduler restarts it after 2 minutes.
+- **Coexistence:** The original "OpenClaw Gateway" task could not be disabled without admin privileges (created by OpenClaw installer). The wrapper's port-check prevents both tasks from starting duplicate Andy instances — if Andy is already up (from the original task), the wrapper waits silently. If Andy crashes, the wrapper restarts it within 15 seconds, before Task Scheduler's 2-minute restart policy kicks in.
+- **Two-layer restart:** (1) start_andy_loop.bat restarts Andy within 15 seconds of node.exe crashing; (2) Kronos-Andy-Autostart task restarts the wrapper itself within 2 minutes if the CMD process is killed.
+- **Tested:** Task state = Running with Andy already up (wrapper correctly waiting, not starting duplicate). Port-check logic verified with netstat.
+- **To manage:** `Get-ScheduledTask -TaskName 'Kronos-Andy-Autostart'` to check state. `Stop-ScheduledTask` to stop. `Start-ScheduledTask` to start manually.
+
 ## Intraday Price Collection — COMPLETED (June 19)
 - **Purpose:** Background data collection for future analysis — specifically, checking whether stop-loss/take-profit levels get hit and recovered intraday, which `outcome_tracker.py` (daily-close-only) cannot see.
 - **Script:** `scripts/intraday_logger.py` — pulls SPY last trade price via Alpaca `StockLatestTradeRequest`, appends `timestamp,price` to `logs/intraday_price_log.csv`.
@@ -178,7 +187,8 @@
 9. ✅ Position sizing decided (June 19) — PASS = $1,000 notional, FLAG = $500 notional, fractional shares
 10. ✅ Telegram notifications built (June 20) — ENTER signals delivered to Peter's phone via @Peters_Open_Claw_Bot
 11. ✅ Andy health monitor built (June 25) — scripts/andy_health.py checks port 18789 every 30 min, sends Telegram alert on DOWN/recovery
-12. ⬜ **NEXT: 30-day paper trading window** — begins on first ENTER signal after June 20; track start date when it fires
+12. ✅ Andy auto-restart built (June 25) — start_andy_loop.bat + Kronos-Andy-Autostart Task Scheduler task; two-layer restart on crash
+13. ⬜ **NEXT: 30-day paper trading window** — begins on first ENTER signal after June 20; track start date when it fires
 12. ⬜ Live trading with $5,000-$10,000 capital on MES (after Alpaca validation proves out, requires funding live Tradovate)
 13. ⬜ Scale up, add QQQ, crypto, FOREX instruments
 14. ⬜ Semi-autopilot with Claude Code + broker API executor
@@ -266,6 +276,13 @@ cd ~/trading-system && python3 scripts/andy_health.py
 
 # View Andy health log (last 20 entries)
 tail -20 ~/trading-system/logs/andy_health.log
+
+# Check Andy auto-restart task state (from WSL)
+powershell.exe -Command "Get-ScheduledTaskInfo -TaskName 'Kronos-Andy-Autostart' | Select-Object LastRunTime, LastTaskResult, NextRunTime"
+
+# Stop/start Andy auto-restart task manually
+powershell.exe -Command "Stop-ScheduledTask -TaskName 'Kronos-Andy-Autostart'"
+powershell.exe -Command "Start-ScheduledTask -TaskName 'Kronos-Andy-Autostart'"
 
 # Check Alpaca account and live quote
 cd ~/trading-system && python3 scripts/alpaca_data.py
