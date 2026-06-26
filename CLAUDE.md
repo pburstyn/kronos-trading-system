@@ -24,6 +24,7 @@
 - `scripts/telegram_notify.py` — Sends Telegram message to Peter via @Peters_Open_Claw_Bot when pipeline fires an ENTER decision. Skips silently on NEUTRAL/VETO/stale signals. Reads botToken from openclaw.json, chat ID from .env (TELEGRAM_CHAT_ID).
 - `scripts/intraday_logger.py` — **Standalone, pipeline-independent.** Pulls SPY's last trade price from Alpaca and appends to logs/intraday_price_log.csv. Runs via cron every 15 min during market hours only (ET check inside script). Does not touch the trading pipeline in any way.
 - `scripts/andy_health.py` — **Standalone, pipeline-independent.** Checks if OpenClaw (Andy) is reachable on port 18789 via powershell.exe Test-NetConnection. Sends Telegram alert only on status change (UP→DOWN or DOWN→UP). State tracked in logs/andy_status.json. Runs every 30 min 24/7 via cron. Logs to logs/andy_health.log.
+- `scripts/morning_check.py` — **Standalone, pipeline-independent.** Runs at 7 AM PT (10 AM ET) weekdays. Checks Alpaca for open SPY position or pending orders; sends Telegram with filled price, current SPY price, unrealized P&L, and bracket leg status. Alerts if order is unfilled. Logs to logs/morning_check.log.
 - `scripts/alpaca_data.py` — Real-time SPY quotes and paper trading account info via Alpaca Markets
 - `scripts/fred_data.py` — Macro data (Fed Funds Rate, CPI, unemployment) via FRED API
 - `scripts/fear_greed.py` — CNN Fear and Greed Index sentiment data
@@ -38,6 +39,7 @@
 - `logs/alpaca_orders.csv` — Submitted Alpaca paper orders (order ID, direction, notional, stop/take-profit levels)
 - `logs/andy_status.json` — Last known Andy health status (UP/DOWN) and timestamp; used by andy_health.py to suppress duplicate alerts
 - `logs/andy_health.log` — Andy health check log (appended by cron every 30 min)
+- `logs/morning_check.log` — Morning trade check log (appended by cron at 7 AM PT weekdays)
 
 ## Signal Engine Settings
 - **Ticker:** SPY
@@ -272,6 +274,9 @@ tail -5 ~/trading-system/logs/intraday_price_log.csv
 
 # Check Alpaca paper orders placed
 cat ~/trading-system/logs/alpaca_orders.csv
+
+# Run morning trade check manually
+cd ~/trading-system && python3 scripts/morning_check.py
 
 # Check Andy health manually
 cd ~/trading-system && python3 scripts/andy_health.py
