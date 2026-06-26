@@ -78,7 +78,7 @@ def execute_trade(decision, client):
         return
 
     notional = get_notional(decision["verdict"])
-    qty = round(notional / decision["entry"], 6)
+    qty = max(1, int(notional / decision["entry"]))  # whole shares only — Alpaca requires DAY TIF for fractional, incompatible with GTC bracket
     side = OrderSide.BUY if decision["direction"] == "UP" else OrderSide.SELL
 
     order_request = MarketOrderRequest(

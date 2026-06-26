@@ -118,7 +118,8 @@
 - **Instrument:** SPY shares (not MES futures)
 - **Accuracy tradeoff accepted:** signal generation, entry/stop/take-profit price levels, and win/loss outcomes will all be equally valid on Alpaca since they're based on real SPY price action. What will NOT be tested: futures leverage (~10:1 vs SPY's 1:1/4:1), overnight/weekend gap behavior, and contract rolling (MESM6→MESU6). Revisit funding live Tradovate ONLY after Kronos proves out on Alpaca.
 - **Execution script BUILT (June 19):** scripts/alpaca_execute.py — places bracket orders (market entry + stop-loss stop + take-profit limit) via alpaca-py. Wired into run_pipeline.sh after trade_logic.py.
-- **Position sizing DECIDED (June 19):** PASS = $1,000 notional, FLAG = $500 notional. Fractional shares used (qty = notional / last_close). Alpaca handles fractional share execution.
+- **Position sizing DECIDED (June 19):** PASS = $1,000 notional, FLAG = $500 notional. Whole shares used (qty = max(1, int(notional / last_close))). At SPY ~$734, both PASS and FLAG resolve to 1 share — size distinction reappears naturally when SPY drops below ~$500.
+- **Fractional share fix (June 26):** Original code used fractional qty with GTC — Alpaca rejects this with 422 "fractional orders must be DAY orders". Fixed to whole shares (integer qty, min 1) so GTC bracket stays valid. Commit: see below.
 - **Order type:** GTC bracket order. Stop-loss and take-profit legs stay active until triggered. Script skips if an existing SPY position or open order is already present (no stacking).
 - **Two parallel outcome-tracking systems now exist:** (1) paper_trades.csv via auto_logger + outcome_tracker (simulated, daily-close based), (2) Alpaca bracket orders (actual fills managed by Alpaca). Both run on real SPY price action.
 - **30-day paper trading window:** begins on the next pipeline run that produces an ENTER decision.
@@ -188,7 +189,8 @@
 10. ✅ Telegram notifications built (June 20) — ENTER signals delivered to Peter's phone via @Peters_Open_Claw_Bot
 11. ✅ Andy health monitor built (June 25) — scripts/andy_health.py checks port 18789 every 30 min, sends Telegram alert on DOWN/recovery
 12. ✅ Andy auto-restart built (June 25) — start_andy_loop.bat + Kronos-Andy-Autostart Task Scheduler task; two-layer restart on crash
-13. ⬜ **NEXT: 30-day paper trading window** — begins on first ENTER signal after June 20; track start date when it fires
+13. ✅ **First paper trade placed (June 25)** — DOWN FLAG, SPY $734.30, 1 share short, stop $748.99 / take-profit $712.27. Alpaca order ID: 7aa3c1a7. 30-day window started.
+14. ⬜ Live trading with $5,000-$10,000 capital on MES (after Alpaca validation proves out)
 12. ⬜ Live trading with $5,000-$10,000 capital on MES (after Alpaca validation proves out, requires funding live Tradovate)
 13. ⬜ Scale up, add QQQ, crypto, FOREX instruments
 14. ⬜ Semi-autopilot with Claude Code + broker API executor
