@@ -40,6 +40,7 @@
 - `logs/andy_status.json` — Last known Andy health status (UP/DOWN) and timestamp; used by andy_health.py to suppress duplicate alerts
 - `logs/andy_health.log` — Andy health check log (appended by cron every 30 min)
 - `logs/morning_check.log` — Morning trade check log (appended by cron at 7 AM PT weekdays)
+- `logs/outcome_tracker.log` — Standalone outcome tracker log (appended by cron at 1:05 PM PT weekdays, right after market close)
 
 ## Signal Engine Settings
 - **Ticker:** SPY
@@ -149,6 +150,7 @@
 - **scripts/outcome_tracker.py (NEW FILE):** runs daily, checks all OPEN trades against current SPY closing price via yfinance, auto-closes any trade that hit its stop-loss or take-profit, calculates pnl_dollars/pnl_pct, flips status to CLOSED. Leaves unresolved trades OPEN with unrealized PnL printed.
 - **LIMITATION:** checks daily closing price only, not intraday — a stop-loss hit and recovered intraday won't be caught. Possible future upgrade via Alpaca intraday data if this proves too loose.
 - Wired into run_pipeline.sh immediately after auto_logger.py
+- **Standalone cron added (July 1 2026):** also runs at 1:05 PM PT (4:05 PM ET) weekdays — immediately after market close — so paper_trades.csv updates without waiting for the 6pm pipeline. Logs to logs/outcome_tracker.log.
 - Commit: a9fd30c
 
 ## Andy Health Monitor — COMPLETED (June 25)
