@@ -125,7 +125,18 @@
 - **Fractional share fix (June 26):** Original code used fractional qty with GTC — Alpaca rejects this with 422 "fractional orders must be DAY orders". Fixed to whole shares (integer qty, min 1) so GTC bracket stays valid. Commit: see below.
 - **Order type:** GTC bracket order. Stop-loss and take-profit legs stay active until triggered. Script skips if an existing SPY position or open order is already present (no stacking).
 - **Two parallel outcome-tracking systems now exist:** (1) paper_trades.csv via auto_logger + outcome_tracker (simulated, daily-close based), (2) Alpaca bracket orders (actual fills managed by Alpaca). Both run on real SPY price action.
-- **30-day paper trading window:** begins on the next pipeline run that produces an ENTER decision.
+- **30-day paper trading window:** started June 25, 2026.
+
+## Paper Trading Results
+
+| Date | Direction | Entry | Stop | TP | Verdict | Exit | Exit Reason | P&L $ | P&L % | Status |
+|------|-----------|-------|------|----|---------|------|-------------|-------|--------|--------|
+| 2026-06-25 | DOWN | $734.30 | $748.99 | $712.27 | FLAG | $748.99 | STOP_LOSS | −$20.65 | −2.81% | CLOSED |
+| 2026-06-26 | DOWN | $728.99 | $743.57 | $707.12 | FLAG | $746.77 | STOP_LOSS | −$17.78 | −2.44% | CLOSED |
+
+- **Running record:** 0 wins / 2 losses. Both stopped out on SPY rally to ~$750.
+- **Note on June 25 P&L:** Alpaca filled the short at $728.34 at Friday open (not the signal's $734.30 last close); Alpaca bracket stop triggered at $748.99. P&L calculated on actual fill price.
+- **outcome_tracker.py limitation:** uses daily closing price — does not catch intraday stop hits. June 25 trade showed OPEN until manually corrected on July 2. June 26 trade was caught by outcome_tracker at 6pm close on June 30.
 
 ## Telegram Notifications — COMPLETED (June 20)
 - **Bot:** @Peters_Open_Claw_Bot (same bot OpenClaw/Andy uses). No new bot needed.
