@@ -5,7 +5,8 @@ from datetime import datetime
 from dotenv import load_dotenv
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from trade_logic import get_latest_decision_row, make_trade_decision, extract_verdict
+from trade_logic import get_latest_decision_row, make_trade_decision, extract_verdict, calculate_trade_levels
+from alpaca_data import get_latest_quote
 
 load_dotenv(os.path.expanduser("~/trading-system/.env"))
 
@@ -77,8 +78,20 @@ def execute_trade(decision, client):
         print(f"  SKIPPED: Already have {reason} in {TICKER}.")
         return
 
+    # decision["entry"] is last_close from the prior day's decisions_log row — by the time
+    # this market order actually fills, price has moved, so stop/take-profit must be
+    # recomputed off a live quote or the resulting % from actual fill drifts (e.g. 2.84%
+    # stop / 2.21% take-profit instead of the configured 2% / 3%).
+    try:
+        quote = get_latest_quote()
+        live_price = (float(quote.bid_price) + float(quote.ask_price)) / 2
+        levels = calculate_trade_levels(decision["direction"], live_price)
+    except Exception as e:
+        print(f"  WARNING: Could not fetch live quote ({e}); falling back to stale entry ${decision['entry']}.")
+        levels = calculate_trade_levels(decision["direction"], decision["entry"])
+
     notional = get_notional(decision["verdict"])
-    qty = max(1, int(notional / decision["entry"]))  # whole shares only — Alpaca requires DAY TIF for fractional, incompatible with GTC bracket
+    qty = max(1, int(notional / levels["entry"]))  # whole shares only — Alpaca requires DAY TIF for fractional, incompatible with GTC bracket
     side = OrderSide.BUY if decision["direction"] == "UP" else OrderSide.SELL
 
     order_request = MarketOrderRequest(
@@ -87,18 +100,19 @@ def execute_trade(decision, client):
         side=side,
         time_in_force=TimeInForce.GTC,
         order_class=OrderClass.BRACKET,
-        take_profit=TakeProfitRequest(limit_price=decision["take_profit_low"]),
-        stop_loss=StopLossRequest(stop_price=decision["stop_loss"])
+        take_profit=TakeProfitRequest(limit_price=levels["take_profit_low"]),
+        stop_loss=StopLossRequest(stop_price=levels["stop_loss"])
     )
 
     order = client.submit_order(order_request)
-    log_order(order, decision, notional, qty)
+    order_decision = {**decision, "entry": levels["entry"], "stop_loss": levels["stop_loss"], "take_profit_low": levels["take_profit_low"]}
+    log_order(order, order_decision, notional, qty)
 
     print(f"  ORDER SUBMITTED: {side.value.upper()} {qty} shares of {TICKER}")
     print(f"  Notional: ${notional:.2f} ({decision['verdict']})")
-    print(f"  Entry (approx): ${decision['entry']}")
-    print(f"  Stop-loss: ${decision['stop_loss']}")
-    print(f"  Take-profit: ${decision['take_profit_low']}")
+    print(f"  Entry (approx, live quote): ${levels['entry']}")
+    print(f"  Stop-loss: ${levels['stop_loss']}")
+    print(f"  Take-profit: ${levels['take_profit_low']}")
     print(f"  Order ID: {order.id}")
 
 
