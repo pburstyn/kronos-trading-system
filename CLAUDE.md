@@ -25,6 +25,7 @@
 - `scripts/intraday_logger.py` — **Standalone, pipeline-independent.** Pulls SPY's last trade price from Alpaca and appends to logs/intraday_price_log.csv. Runs via cron every 15 min during market hours only (ET check inside script). Does not touch the trading pipeline in any way.
 - `scripts/andy_health.py` — **Standalone, pipeline-independent.** Checks if OpenClaw (Andy) is reachable on port 18789 via powershell.exe Test-NetConnection. Sends Telegram alert only on status change (UP→DOWN or DOWN→UP). State tracked in logs/andy_status.json. Runs every 30 min 24/7 via cron. Logs to logs/andy_health.log.
 - `scripts/morning_check.py` — **Standalone, pipeline-independent.** Runs at 7 AM PT (10 AM ET) weekdays. Checks Alpaca for open SPY position or pending orders; sends Telegram with filled price, current SPY price, unrealized P&L, and bracket leg status. Alerts if order is unfilled. Logs to logs/morning_check.log.
+- `scripts/tech_watch.py` — **Standalone, pipeline-independent.** Runs Mondays at 7:05 AM PT. Queries the HN Algolia search API (`https://hn.algolia.com/api/v1/search`) for stories from the past 7 days matching keywords (LLM, AI trading, Claude Code, MCP, alpaca trading, autonomous agents, trading bot), filters client-side for ≥10 points (the API's `numericFilters` rejects `points` as an unregistered attribute — only `created_at_i` works server-side), dedupes, takes the top 5 by points, and sends a formatted Telegram digest. Sends a "nothing notable this week" message if no story clears the bar. Logs to logs/tech_watch.log.
 - `scripts/alpaca_data.py` — Real-time SPY quotes and paper trading account info via Alpaca Markets
 - `scripts/fred_data.py` — Macro data (Fed Funds Rate, CPI, unemployment) via FRED API
 - `scripts/fear_greed.py` — CNN Fear and Greed Index sentiment data
@@ -41,6 +42,7 @@
 - `logs/andy_health.log` — Andy health check log (appended by cron every 30 min)
 - `logs/morning_check.log` — Morning trade check log (appended by cron at 7 AM PT weekdays)
 - `logs/outcome_tracker.log` — Standalone outcome tracker log (appended by cron at 1:05 PM PT weekdays, right after market close)
+- `logs/tech_watch.log` — Standalone tech watch log (appended by cron Mondays at 7:05 AM PT)
 
 ## Signal Engine Settings
 - **Ticker:** SPY
@@ -123,6 +125,7 @@
 - **Execution script BUILT (June 19):** scripts/alpaca_execute.py — places bracket orders (market entry + stop-loss stop + take-profit limit) via alpaca-py. Wired into run_pipeline.sh after trade_logic.py.
 - **Position sizing DECIDED (June 19):** PASS = $1,000 notional, FLAG = $500 notional. Whole shares used (qty = max(1, int(notional / last_close))). At SPY ~$734, both PASS and FLAG resolve to 1 share — size distinction reappears naturally when SPY drops below ~$500.
 - **Fractional share fix (June 26):** Original code used fractional qty with GTC — Alpaca rejects this with 422 "fractional orders must be DAY orders". Fixed to whole shares (integer qty, min 1) so GTC bracket stays valid. Commit: see below.
+- **Bracket stop/take-profit drift fix (July 4):** Code review flagged stops landing at 2.84% and take-profits at 2.21% instead of the configured 2%/3%. Root cause: stop-loss/take-profit were computed as absolute prices off the prior day's stale `last_close` from decisions_log.csv, but the market order actually fills at the live price next session — e.g. June 25's trade was priced off $734.30 but filled at $728.34, so the fixed $748.99/$712.27 legs worked out to the wrong % from the real fill. Fixed by fetching a live quote (bid/ask midpoint via alpaca_data.get_latest_quote) and recomputing levels via trade_logic.calculate_trade_levels immediately before order submission; falls back to the stale entry with a warning if the quote fetch fails. Qty sizing and logged entry_price now use the live-quote-based entry too. Commit: f6a11d5.
 - **Order type:** GTC bracket order. Stop-loss and take-profit legs stay active until triggered. Script skips if an existing SPY position or open order is already present (no stacking).
 - **Two parallel outcome-tracking systems now exist:** (1) paper_trades.csv via auto_logger + outcome_tracker (simulated, daily-close based), (2) Alpaca bracket orders (actual fills managed by Alpaca). Both run on real SPY price action.
 - **30-day paper trading window:** started June 25, 2026.
@@ -191,6 +194,17 @@
 - **Isolation:** Completely separate from the trading pipeline. Does not read from or write to any pipeline log. Does not trigger any trade action. Safe to disable or delete without affecting signal generation, analyst reasoning, or order execution.
 - **Future use:** Once enough intraday data accumulates, can cross-reference against `paper_trades.csv` stop/take-profit levels to audit whether daily-close outcome_tracker.py is over- or under-counting wins/losses.
 
+## Tech Watch — COMPLETED (July 6)
+- **Purpose:** Weekly digest of HN discussion relevant to the Kronos stack (LLM tooling, AI trading, Claude Code, MCP, agent frameworks) so Peter doesn't have to monitor HN manually.
+- **Script:** `scripts/tech_watch.py` — standalone, pipeline-independent, no state file (unlike andy_health.py, nothing to persist between runs since it's always looking back a fixed 7 days).
+- **Source:** HN Algolia search API (`https://hn.algolia.com/api/v1/search`), one query per keyword: LLM, AI trading, Claude Code, MCP, alpaca trading, autonomous agents, trading bot.
+- **API quirk discovered during testing:** `numericFilters=points>=10` returns a 400 ("invalid numeric attribute(points), attribute not specified in numericAttributesForFiltering setting") — `points` is not a registered filterable attribute on the public endpoint, only `created_at_i` is. Fixed by filtering the 7-day window server-side via `numericFilters=created_at_i>{timestamp}` and filtering the ≥10-points threshold client-side after fetch.
+- **Dedup + ranking:** Merges hits across all 7 keyword queries by `objectID` (a story can match multiple keywords), sorts by points descending, takes top 5.
+- **Message:** Sends via the same Telegram bot/config pattern as telegram_notify.py/andy_health.py (botToken from openclaw.json, chat ID from .env). Sends "nothing notable this week" if zero stories clear the 10-point bar in the trailing 7 days.
+- **No accuracy vetting:** headlines are surfaced purely by relevance + points, not fact-checked — treat the digest as leads, not confirmed news, especially for any story making claims about Claude/Anthropic itself.
+- **Cron:** `5 7 * * 1` — Mondays only, 7:05 AM PT (chosen to land right after morning_check.py's 7:00 AM slot without overlapping). Stderr+stdout → `logs/tech_watch.log`.
+- **Tested:** Live run July 6 2026 returned 5 stories (top: 2440 pts) and delivered successfully to Telegram.
+
 ## Architecture Roadmap
 1. ✅ Phase 0-3: Signal engine, Andy, Critic, dashboard running
 2. ✅ Backtest validated (57.8% SPY, 57.2% QQQ)
@@ -205,7 +219,8 @@
 11. ✅ Andy health monitor built (June 25) — scripts/andy_health.py checks port 18789 every 30 min, sends Telegram alert on DOWN/recovery
 12. ✅ Andy auto-restart built (June 25) — start_andy_loop.bat + Kronos-Andy-Autostart Task Scheduler task; two-layer restart on crash
 13. ✅ **First paper trade placed (June 25)** — DOWN FLAG, SPY $734.30, 1 share short, stop $748.99 / take-profit $712.27. Alpaca order ID: 7aa3c1a7. 30-day window started.
-14. ⬜ Live trading with $5,000-$10,000 capital on MES (after Alpaca validation proves out)
+14. ✅ Tech watch built (July 6) — scripts/tech_watch.py sends a weekly Monday HN digest (LLM/AI trading/Claude Code/MCP/agents) via Telegram
+15. ⬜ Live trading with $5,000-$10,000 capital on MES (after Alpaca validation proves out)
 12. ⬜ Live trading with $5,000-$10,000 capital on MES (after Alpaca validation proves out, requires funding live Tradovate)
 13. ⬜ Scale up, add QQQ, crypto, FOREX instruments
 14. ⬜ Semi-autopilot with Claude Code + broker API executor
@@ -290,6 +305,12 @@ cat ~/trading-system/logs/alpaca_orders.csv
 
 # Run morning trade check manually
 cd ~/trading-system && python3 scripts/morning_check.py
+
+# Run tech watch manually (add --dry-run to skip the Telegram send)
+cd ~/trading-system && python3 scripts/tech_watch.py
+
+# View tech watch log
+tail -20 ~/trading-system/logs/tech_watch.log
 
 # Check Andy health manually
 cd ~/trading-system && python3 scripts/andy_health.py
