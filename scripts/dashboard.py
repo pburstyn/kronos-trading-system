@@ -79,6 +79,7 @@ def trade_calculator(rows):
     )
 
 def build_table_rows(rows):
+    rows = [r for r in rows if r.get('timestamp','') >= '2026-05-16']
     rows = list(reversed(rows))
     table_rows = ""
     for row in rows:
@@ -88,7 +89,7 @@ def build_table_rows(rows):
         symbol = verdict_symbol(verdict)
         table_rows += (
             f'<tr style="background:{bg};">'
-            f'<td>{row.get("timestamp","")}</td>'
+            f'<td>{datetime.strptime(row.get("timestamp",""), "%Y-%m-%d %H:%M:%S").strftime("%m/%d/%Y %H:%M") if row.get("timestamp") else ""}</td>'
             f'<td><strong>{row.get("ticker","")}</strong></td>'
             f'<td>{row.get("direction","")}</td>'
             f'<td>{row.get("signal_confidence_pct","")}%</td>'
