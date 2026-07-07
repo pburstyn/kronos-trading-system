@@ -87,7 +87,7 @@ def ask_hy3(signal):
             {"role": "system", "content": HY3_SYSTEM_PROMPT},
             {"role": "user", "content": user_message}
         ],
-        "max_tokens": 300
+        "max_tokens": 1000
     }
 
     response = requests.post(OPENROUTER_URL, headers=headers, json=payload, timeout=30)
