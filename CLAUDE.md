@@ -18,6 +18,7 @@
 - `scripts/backtest.py` — Historical backtest script
 - `scripts/compare_ema_rsi.py` — EMA crossover vs Kronos comparison script
 - `scripts/kimi_reasoning.py` — Kimi K2 (via NVIDIA NIM) reasons about the signal as Analyst 2
+- `scripts/hy3_reasoning.py` — Hy3 (via OpenRouter, model `tencent/hy3:free`) reasons about the signal as an optional third analyst. Free tier until July 21 2026. Mirrors kimi_reasoning.py's structure (macro/sentiment/news context, same prompt shape). Logs to logs/hy3_reasoning_log.csv. **Not yet wired into run_pipeline.sh** — built for manually comparing Hy3's reasoning quality against Kimi's before deciding whether to swap.
 - `scripts/trade_logic.py` — Entry/exit decision engine: confidence floor, verdict-based position sizing, stop-loss/take-profit calculation
 - `scripts/alpaca_execute.py` — Places bracket paper orders on Alpaca when trade_logic.py says ENTER; checks for existing exposure before submitting; logs to logs/alpaca_orders.csv
 - `scripts/news_context.py` — Fetches today's top financial headlines via Alpaca News API (no new key needed — uses existing ALPACA_API_KEY). Filters by keywords (Fed, inflation, oil, Iran, earnings, S&P, interest rate, etc.). Caches to logs/news_cache.json. Andy and Kimi call get_news_context() to read from cache — API called once per pipeline run.
@@ -43,6 +44,7 @@
 - `logs/morning_check.log` — Morning trade check log (appended by cron at 7 AM PT weekdays)
 - `logs/outcome_tracker.log` — Standalone outcome tracker log (appended by cron at 1:05 PM PT weekdays, right after market close)
 - `logs/tech_watch.log` — Standalone tech watch log (appended by cron Mondays at 7:05 AM PT)
+- `logs/hy3_reasoning_log.csv` — Hy3's per-signal reasoning log, written by hy3_reasoning.py
 
 ## Signal Engine Settings
 - **Ticker:** SPY
@@ -156,8 +158,11 @@
 - **NVIDIA NIM:** Connected (scripts/kimi_reasoning.py). Model moonshotai/kimi-k2.6.
 - **FRED API:** Connected (scripts/fred_data.py). Pulling FEDFUNDS, CPIAUCSL, UNRATE.
 - **CNN Fear and Greed Index:** Connected (scripts/fear_greed.py). Required full browser-style headers (User-Agent + Accept + Referer) to bypass a 418 bot-blocking error — bare User-Agent alone is not enough.
-- **.env now holds 5 keys:** ANTHROPIC_API_KEY, NVIDIA_API_KEY, ALPACA_API_KEY, ALPACA_SECRET_KEY, FRED_API_KEY
-- **SECURITY NOTE:** Anthropic and NVIDIA keys were exposed in full in a Claude.ai chat session on June 16. Peter made an informed decision not to rotate them (low perceived risk, personal project). Alpaca and FRED keys were never exposed (typed directly into nano).
+- **OpenRouter:** Connected (scripts/hy3_reasoning.py). Model tencent/hy3:free. OPENROUTER_API_KEY added to .env to authenticate.
+- **.env now holds 7 keys:** ANTHROPIC_API_KEY, NVIDIA_API_KEY, ALPACA_API_KEY, ALPACA_SECRET_KEY, FRED_API_KEY, TELEGRAM_CHAT_ID, OPENROUTER_API_KEY (OpenRouter added July 7 for Hy3 access).
+- **SECURITY NOTE:** Anthropic and NVIDIA keys were exposed in full in a Claude.ai chat session on June 16. Peter made an informed decision not to rotate them at the time (low perceived risk, personal project). Alpaca and FRED keys were never exposed (typed directly into nano).
+- **NVIDIA_API_KEY rotated (July 7):** the old key started returning 403 "Authorization failed" from NVIDIA's endpoint — confirmed structurally clean (no whitespace/quotes/malformed characters) but revoked/invalid server-side. Rotated to a fresh key generated at build.nvidia.com; verified with a live 200 OK against the NIM endpoint and a successful kimi_reasoning.py run. Unrelated to the June 16 exposure — this was an independent revocation.
+- **ANTHROPIC_API_KEY fixed (July 6):** the .env line was corrupted with a literal trailing shell-command fragment (`/' ~/trading-system/.env`), likely from a botched `sed -i` replacement that wrote its own argument text into the file instead of executing. Rewritten as a clean single-line value.
 
 ## Outcome Tracking — COMPLETED (June 18)
 - **scripts/auto_logger.py rewritten:** now calculates and stores stop_loss, take_profit_low, take_profit_high at the moment a trade is logged (status=OPEN). New paper_trades.csv columns: stop_loss, take_profit_low, take_profit_high, exit_reason, status.
@@ -220,7 +225,8 @@
 12. ✅ Andy auto-restart built (June 25) — start_andy_loop.bat + Kronos-Andy-Autostart Task Scheduler task; two-layer restart on crash
 13. ✅ **First paper trade placed (June 25)** — DOWN FLAG, SPY $734.30, 1 share short, stop $748.99 / take-profit $712.27. Alpaca order ID: 7aa3c1a7. 30-day window started.
 14. ✅ Tech watch built (July 6) — scripts/tech_watch.py sends a weekly Monday HN digest (LLM/AI trading/Claude Code/MCP/agents) via Telegram
-15. ⬜ Live trading with $5,000-$10,000 capital on MES (after Alpaca validation proves out)
+15. ✅ Hy3 added as optional third-analyst candidate (July 7) — scripts/hy3_reasoning.py via OpenRouter (tencent/hy3:free, free until July 21 2026), not yet wired into run_pipeline.sh, for manual comparison against Kimi
+16. ⬜ Live trading with $5,000-$10,000 capital on MES (after Alpaca validation proves out)
 12. ⬜ Live trading with $5,000-$10,000 capital on MES (after Alpaca validation proves out, requires funding live Tradovate)
 13. ⬜ Scale up, add QQQ, crypto, FOREX instruments
 14. ⬜ Semi-autopilot with Claude Code + broker API executor
@@ -290,6 +296,9 @@ cd ~/trading-system && python3 scripts/signal_logger.py
 
 # Run Kimi reasoning only (Analyst 2)
 cd ~/trading-system && python3 scripts/kimi_reasoning.py
+
+# Run Hy3 reasoning only (optional third analyst, not wired into pipeline)
+cd ~/trading-system && python3 scripts/hy3_reasoning.py
 
 # Run trade logic only (reads latest decisions_log.csv row)
 cd ~/trading-system && python3 scripts/trade_logic.py
