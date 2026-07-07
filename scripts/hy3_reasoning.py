@@ -93,9 +93,23 @@ def ask_hy3(signal):
     response = requests.post(OPENROUTER_URL, headers=headers, json=payload, timeout=30)
     response.raise_for_status()
     result = response.json()
-    return result["choices"][0]["message"]["content"]
+
+    choices = result.get("choices")
+    if not choices:
+        print(f"WARNING: Hy3 response had no choices: {result}")
+        return None
+
+    content = choices[0].get("message", {}).get("content")
+    if not content:
+        print(f"WARNING: Hy3 response had no message content: {result}")
+        return None
+
+    return content
 
 def log_reasoning(signal, reasoning):
+    if not reasoning:
+        reasoning = "Hy3 returned no reasoning"
+
     os.makedirs(os.path.dirname(HY3_REASONING_LOG), exist_ok=True)
     file_exists = os.path.isfile(HY3_REASONING_LOG)
     with open(HY3_REASONING_LOG, "a", newline="") as f:
