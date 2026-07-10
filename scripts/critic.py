@@ -7,13 +7,13 @@ from dotenv import load_dotenv
 load_dotenv(os.path.expanduser("~/trading-system/.env"))
 
 REASONING_LOG = os.path.expanduser("~/trading-system/logs/reasoning_log.csv")
-KIMI_REASONING_LOG = os.path.expanduser("~/trading-system/logs/kimi_reasoning_log.csv")
+HY3_REASONING_LOG = os.path.expanduser("~/trading-system/logs/hy3_reasoning_log.csv")
 DECISIONS_LOG = os.path.expanduser("~/trading-system/logs/decisions_log.csv")
 
 today = datetime.now().strftime("%A, %B %d, %Y, %I:%M %p")
 CRITIC_SYSTEM_PROMPT = (
     f"You are a skeptical trading risk analyst. Today is {today}. "
-    "Your job is to review one or two analysts' reasoning (Andy and possibly Kimi) and find flaws, contradictions, or overconfidence. "
+    "Your job is to review one or two analysts' reasoning (Andy and possibly Hy3) and find flaws, contradictions, or overconfidence. "
     "If both analysts agree, you may weigh that toward PASS. If they disagree, lean toward FLAG and explain which analyst's reasoning is more credible and why. "
     "You must respond in this exact format and nothing else: "
     "VERDICT: [PASS or FLAG or VETO] "
@@ -34,19 +34,19 @@ def get_latest_reasoning():
         return None
     return rows[-1]
 
-def get_kimi_reasoning(timestamp):
-    if not os.path.isfile(KIMI_REASONING_LOG):
+def get_hy3_reasoning(timestamp):
+    if not os.path.isfile(HY3_REASONING_LOG):
         return None
-    with open(KIMI_REASONING_LOG, "r") as f:
+    with open(HY3_REASONING_LOG, "r") as f:
         rows = list(csv.DictReader(f))
     for row in rows:
         if row["timestamp"] == timestamp:
-            return row["kimi_reasoning"]
+            return row["hy3_reasoning"]
     return None
 
 def ask_critic(row):
     client = anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"))
-    kimi_reasoning = get_kimi_reasoning(row["timestamp"])
+    hy3_reasoning = get_hy3_reasoning(row["timestamp"])
     msg = (
         "Ticker: " + row["ticker"] +
         " Direction: " + row["direction"] +
@@ -54,11 +54,11 @@ def ask_critic(row):
         " Last close: " + row["last_close"] +
         " Andy's Reasoning: " + row["andy_reasoning"]
     )
-    if kimi_reasoning:
-        msg += " Kimi's Reasoning: " + kimi_reasoning
-        msg += " Note whether Andy and Kimi agree or disagree, and weigh that in your verdict."
+    if hy3_reasoning:
+        msg += " Hy3's Reasoning: " + hy3_reasoning
+        msg += " Note whether Andy and Hy3 agree or disagree, and weigh that in your verdict."
     else:
-        msg += " (Kimi analysis not available for this signal.)"
+        msg += " (Hy3 analysis not available for this signal.)"
     msg += " Issue your verdict now."
     response = client.messages.create(
         model="claude-haiku-4-5-20251001",
@@ -85,12 +85,12 @@ def parse_verdict(critic_response):
 def log_decision(row, verdict, reason, confidence):
     os.makedirs(os.path.dirname(DECISIONS_LOG), exist_ok=True)
     file_exists = os.path.isfile(DECISIONS_LOG)
-    kimi_reasoning = get_kimi_reasoning(row["timestamp"]) or "N/A"
+    hy3_reasoning = get_hy3_reasoning(row["timestamp"]) or "N/A"
     with open(DECISIONS_LOG, "a", newline="") as f:
         writer = csv.writer(f)
         if not file_exists:
-            writer.writerow(["timestamp", "ticker", "direction", "signal_confidence_pct", "last_close", "andy_reasoning", "kimi_reasoning", "critic_verdict", "critic_reason", "critic_confidence"])
-        writer.writerow([row["timestamp"], row["ticker"], row["direction"], row["confidence_pct"], row["last_close"], row["andy_reasoning"], kimi_reasoning, verdict, reason, confidence])
+            writer.writerow(["timestamp", "ticker", "direction", "signal_confidence_pct", "last_close", "andy_reasoning", "hy3_reasoning", "critic_verdict", "critic_reason", "critic_confidence"])
+        writer.writerow([row["timestamp"], row["ticker"], row["direction"], row["confidence_pct"], row["last_close"], row["andy_reasoning"], hy3_reasoning, verdict, reason, confidence])
     verdict_symbols = {"PASS": "PASS", "FLAG": "FLAG", "VETO": "VETO"}
     symbol = verdict_symbols.get(verdict, "?")
     print("\n-- Critic Verdict --")

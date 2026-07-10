@@ -17,8 +17,8 @@
 - `scripts/run_pipeline.sh` — Master pipeline script
 - `scripts/backtest.py` — Historical backtest script
 - `scripts/compare_ema_rsi.py` — EMA crossover vs Kronos comparison script
-- `scripts/kimi_reasoning.py` — Kimi K2 (via NVIDIA NIM) reasons about the signal as Analyst 2
-- `scripts/hy3_reasoning.py` — Hy3 (via OpenRouter, model `tencent/hy3:free`) reasons about the signal as an optional third analyst. Free tier until July 21 2026. Mirrors kimi_reasoning.py's structure (macro/sentiment/news context, same prompt shape). Logs to logs/hy3_reasoning_log.csv. **Not yet wired into run_pipeline.sh** — built for manually comparing Hy3's reasoning quality against Kimi's before deciding whether to swap.
+- `scripts/kimi_reasoning.py` — Kimi K2 (via NVIDIA NIM) reasons about the signal. **No longer called from run_pipeline.sh as of July 9** (see Analyst 2 Swap section) — left intact for manual use in case NVIDIA access is restored.
+- `scripts/hy3_reasoning.py` — Hy3 (via OpenRouter, model `tencent/hy3:free`) reasons about the signal. **Analyst 2 in run_pipeline.sh as of July 9**, replacing Kimi. Free tier until July 21 2026. Mirrors kimi_reasoning.py's structure (macro/sentiment/news context, same prompt shape). Logs to logs/hy3_reasoning_log.csv.
 - `scripts/trade_logic.py` — Entry/exit decision engine: confidence floor, verdict-based position sizing, stop-loss/take-profit calculation
 - `scripts/alpaca_execute.py` — Places bracket paper orders on Alpaca when trade_logic.py says ENTER; checks for existing exposure before submitting; logs to logs/alpaca_orders.csv
 - `scripts/news_context.py` — Fetches today's top financial headlines via Alpaca News API (no new key needed — uses existing ALPACA_API_KEY). Filters by keywords (Fed, inflation, oil, Iran, earnings, S&P, interest rate, etc.). Caches to logs/news_cache.json. Andy and Kimi call get_news_context() to read from cache — API called once per pipeline run.
@@ -83,13 +83,23 @@
 
 ## Phase 2 Architecture — COMPLETED (June 16-17)
 - **Andy (Claude Haiku):** Analyst 1
-- **Kimi K2 via NVIDIA NIM:** Analyst 2 (free tier, model: moonshotai/kimi-k2.6)
+- ~~**Kimi K2 via NVIDIA NIM:** Analyst 2 (free tier, model: moonshotai/kimi-k2.6)~~ — **replaced by Hy3, effective July 9 2026** (see Analyst 2 Swap section below)
 - **Endpoint:** https://integrate.api.nvidia.com/v1/chat/completions
 - **Critic:** Referee — reads both outputs, issues PASS/FLAG/VETO, logs both reasonings to decisions_log.csv
 - Agreement between Andy and Kimi raises confidence toward PASS
 - Disagreement triggers FLAG with Critic explaining which analyst is more credible
 - Validated against June 10 historical signal: both analysts independently flagged the same 90%-confidence-vs-bullish-structure contradiction; Critic correctly synthesized into FLAG, HIGH confidence
 - Commits: cb82783 (Kimi wired in), aea8077 (trade_logic wired into pipeline)
+
+## Analyst 2 Swap: Kimi → Hy3 — COMPLETED (July 9)
+- **Reason:** kimi_reasoning.py (moonshotai/kimi-k2.6 via NVIDIA NIM) started failing with `404 Not Found — "Function '23d4f03a-...': Not found for account '...'"`. Confirmed via direct curl test that the key itself authenticates fine (a bad key would 401/403, not 404) — the model is still listed in NVIDIA's public `/v1/models` catalog, but the backend function serving it isn't deployed/entitled for this account. Not fixable by editing `.env`; looks like an NVIDIA-side access/tier gap.
+- **Swap:** `run_pipeline.sh` now calls `scripts/hy3_reasoning.py` instead of `scripts/kimi_reasoning.py` as Analyst 2.
+- **critic.py updated to match** — this was a required part of the swap, not optional: critic.py previously read Analyst 2's reasoning from `logs/kimi_reasoning_log.csv` (column `kimi_reasoning`) by timestamp. Just swapping the pipeline call without updating critic.py would have left Critic silently blind to Analyst 2 — no error, just a quiet fallback to Andy-only reasoning. Renamed `get_kimi_reasoning()` → `get_hy3_reasoning()`, now reads `logs/hy3_reasoning_log.csv` (column `hy3_reasoning`); system prompt and message-building text updated from "Kimi" to "Hy3" throughout.
+- **decisions_log.csv column naming:** the CSV writer now labels the analyst-2 column `hy3_reasoning` for any file created fresh. The existing live `decisions_log.csv` keeps whatever header it already had (append-only — header is only written once, on file creation) — new rows are not retroactively relabeled.
+- **kimi_reasoning.py left fully intact** — not deleted, not modified, just no longer called from run_pipeline.sh. Can be run manually (`python3 scripts/kimi_reasoning.py`) any time to check whether NVIDIA has restored access.
+- **Tested live (July 9):** ran hy3_reasoning.py → critic.py back-to-back against today's UP signal (SPY, 80% confidence). Critic's verdict explicitly referenced Hy3 by name and synthesized both analysts' agreement on weak volume into a FLAG verdict — confirms the wiring works end-to-end, not just that the scripts run individually.
+- **BUG DISCOVERED during this test, pre-existing and unrelated to the swap itself:** `logs/decisions_log.csv`'s live header row is stale — it's missing the analyst-2-reasoning column entirely (9 header columns vs. 10 columns actually written per row by critic.py). This silently shifts every DictReader-based read of this file by one column: `critic_verdict` reads what is actually Analyst 2's reasoning text, `critic_reason` reads what is actually the verdict, `critic_confidence` reads what is actually the reason, and the true confidence value falls off the end into an unnamed column. This affects `trade_logic.py`'s `extract_verdict()`, `dashboard.py`, `telegram_notify.py`, and `alpaca_execute.py` — anything reading decisions_log.csv by column name. **Not yet fixed** — needs its own decision (migrate the header vs. patch readers) since it touches live trading logic. Flagged to Peter, not fixed in this change.
+- **SECOND BUG DISCOVERED, also pre-existing:** `critic.py`'s `parse_verdict()` does strict `line.startswith("VERDICT:")` / `"REASON:"` / `"CONFIDENCE_IN_VERDICT:"` matching, but Claude Haiku's actual responses wrap these in markdown bold (`**VERDICT: FLAG**`), which never matches — so `verdict` and `confidence` silently default to `"UNKNOWN"` on every run, and `reason` falls back to the entire raw response. Observed live during today's test. **Not yet fixed** — flagged to Peter, not fixed in this change.
 
 ## Entry/Exit Logic — COMPLETED (scripts/trade_logic.py)
 - Long entry: MACD above signal + RSI < 70 + histogram positive + confidence > 51%
@@ -225,8 +235,9 @@
 12. ✅ Andy auto-restart built (June 25) — start_andy_loop.bat + Kronos-Andy-Autostart Task Scheduler task; two-layer restart on crash
 13. ✅ **First paper trade placed (June 25)** — DOWN FLAG, SPY $734.30, 1 share short, stop $748.99 / take-profit $712.27. Alpaca order ID: 7aa3c1a7. 30-day window started.
 14. ✅ Tech watch built (July 6) — scripts/tech_watch.py sends a weekly Monday HN digest (LLM/AI trading/Claude Code/MCP/agents) via Telegram
-15. ✅ Hy3 added as optional third-analyst candidate (July 7) — scripts/hy3_reasoning.py via OpenRouter (tencent/hy3:free, free until July 21 2026), not yet wired into run_pipeline.sh, for manual comparison against Kimi
-16. ⬜ Live trading with $5,000-$10,000 capital on MES (after Alpaca validation proves out)
+15. ✅ Hy3 added as optional third-analyst candidate (July 7) — scripts/hy3_reasoning.py via OpenRouter (tencent/hy3:free, free until July 21 2026), for manual comparison against Kimi
+16. ✅ Hy3 replaced Kimi as Analyst 2 in run_pipeline.sh (July 9) — NVIDIA NIM access to moonshotai/kimi-k2.6 broke (404, account-level entitlement issue, not a key problem). critic.py updated to read Hy3's log instead of Kimi's. kimi_reasoning.py left intact for manual use. Surfaced two pre-existing, unrelated bugs in decisions_log.csv column alignment and critic.py's verdict parsing — flagged, not yet fixed.
+17. ⬜ Live trading with $5,000-$10,000 capital on MES (after Alpaca validation proves out)
 12. ⬜ Live trading with $5,000-$10,000 capital on MES (after Alpaca validation proves out, requires funding live Tradovate)
 13. ⬜ Scale up, add QQQ, crypto, FOREX instruments
 14. ⬜ Semi-autopilot with Claude Code + broker API executor
@@ -294,11 +305,11 @@ cd ~/trading-system && bash scripts/run_pipeline.sh
 # Run signal logger only
 cd ~/trading-system && python3 scripts/signal_logger.py
 
-# Run Kimi reasoning only (Analyst 2)
-cd ~/trading-system && python3 scripts/kimi_reasoning.py
-
-# Run Hy3 reasoning only (optional third analyst, not wired into pipeline)
+# Run Hy3 reasoning only (Analyst 2, as of July 9)
 cd ~/trading-system && python3 scripts/hy3_reasoning.py
+
+# Run Kimi reasoning manually (no longer in pipeline — check if NVIDIA access is restored)
+cd ~/trading-system && python3 scripts/kimi_reasoning.py
 
 # Run trade logic only (reads latest decisions_log.csv row)
 cd ~/trading-system && python3 scripts/trade_logic.py
