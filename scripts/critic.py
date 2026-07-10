@@ -1,6 +1,7 @@
 import anthropic
 import csv
 import os
+import re
 from datetime import datetime
 from dotenv import load_dotenv
 
@@ -69,17 +70,29 @@ def ask_critic(row):
     return response.content[0].text
 
 def parse_verdict(critic_response):
-    lines = critic_response.strip().split("\n")
+    # Claude Haiku sometimes wraps labels/values in markdown bold
+    # (e.g. "**VERDICT: FLAG**"), which a plain startswith("VERDICT:")
+    # never matches — strip markdown emphasis before line-matching.
+    cleaned = critic_response.replace("*", "")
+    lines = cleaned.strip().split("\n")
     verdict = "UNKNOWN"
     reason = critic_response
     confidence = "UNKNOWN"
     for line in lines:
-        if line.startswith("VERDICT:"):
-            verdict = line.replace("VERDICT:", "").strip()
-        elif line.startswith("REASON:"):
-            reason = line.replace("REASON:", "").strip()
-        elif line.startswith("CONFIDENCE_IN_VERDICT:"):
-            confidence = line.replace("CONFIDENCE_IN_VERDICT:", "").strip()
+        line = line.strip()
+        if not line:
+            continue
+        upper = line.upper()
+        if upper.startswith("VERDICT:"):
+            match = re.search(r"\b(PASS|FLAG|VETO)\b", line, re.IGNORECASE)
+            if match:
+                verdict = match.group(1).upper()
+        elif upper.startswith("REASON:"):
+            reason = line.split(":", 1)[1].strip()
+        elif upper.startswith("CONFIDENCE_IN_VERDICT:"):
+            match = re.search(r"\b(LOW|MEDIUM|HIGH)\b", line, re.IGNORECASE)
+            if match:
+                confidence = match.group(1).upper()
     return verdict, reason, confidence
 
 def log_decision(row, verdict, reason, confidence):
