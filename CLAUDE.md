@@ -18,7 +18,8 @@
 - `scripts/backtest.py` — Historical backtest script
 - `scripts/compare_ema_rsi.py` — EMA crossover vs Kronos comparison script
 - `scripts/kimi_reasoning.py` — Kimi K2 (via NVIDIA NIM) reasons about the signal. **No longer called from run_pipeline.sh as of July 9** (see Analyst 2 Swap section) — left intact for manual use in case NVIDIA access is restored.
-- `scripts/hy3_reasoning.py` — Hy3 (via OpenRouter, model `tencent/hy3:free`) reasons about the signal. **Analyst 2 in run_pipeline.sh as of July 9**, replacing Kimi. Free tier until July 21 2026. Mirrors kimi_reasoning.py's structure (macro/sentiment/news context, same prompt shape). Logs to logs/hy3_reasoning_log.csv.
+- `scripts/hy3_reasoning.py` — Hy3 (via OpenRouter, model `tencent/hy3:free`) reasons about the signal. **No longer called from run_pipeline.sh as of July 17** (see Analyst 2 Swap: Hy3 → Kimi K3 section) — left intact for manual use. Free tier until July 21 2026. Mirrors kimi_reasoning.py's structure (macro/sentiment/news context, same prompt shape). Logs to logs/hy3_reasoning_log.csv.
+- `scripts/kimi_k3_reasoning.py` — Kimi K3 (via OpenRouter, model `moonshotai/kimi-k3`) reasons about the signal. **Analyst 2 in run_pipeline.sh as of July 17**, replacing Hy3. Paid model ($3/M prompt, $15/M completion tokens) — not free tier like Hy3. Mirrors hy3_reasoning.py's structure exactly (macro/sentiment/news context, same prompt shape). Logs to logs/kimi_k3_reasoning_log.csv.
 - `scripts/trade_logic.py` — Entry/exit decision engine: confidence floor, verdict-based position sizing, stop-loss/take-profit calculation
 - `scripts/alpaca_execute.py` — Places bracket paper orders on Alpaca when trade_logic.py says ENTER; checks for existing exposure before submitting; logs to logs/alpaca_orders.csv
 - `scripts/news_context.py` — Fetches today's top financial headlines via Alpaca News API (no new key needed — uses existing ALPACA_API_KEY). Filters by keywords (Fed, inflation, oil, Iran, earnings, S&P, interest rate, etc.). Caches to logs/news_cache.json. Andy and Kimi call get_news_context() to read from cache — API called once per pipeline run.
@@ -45,6 +46,7 @@
 - `logs/outcome_tracker.log` — Standalone outcome tracker log (appended by cron at 1:05 PM PT weekdays, right after market close)
 - `logs/tech_watch.log` — Standalone tech watch log (appended by cron Mondays at 7:05 AM PT)
 - `logs/hy3_reasoning_log.csv` — Hy3's per-signal reasoning log, written by hy3_reasoning.py
+- `logs/kimi_k3_reasoning_log.csv` — Kimi K3's per-signal reasoning log, written by kimi_k3_reasoning.py
 
 ## Signal Engine Settings
 - **Ticker:** SPY
@@ -83,7 +85,8 @@
 
 ## Phase 2 Architecture — COMPLETED (June 16-17)
 - **Andy (Claude Haiku):** Analyst 1
-- ~~**Kimi K2 via NVIDIA NIM:** Analyst 2 (free tier, model: moonshotai/kimi-k2.6)~~ — **replaced by Hy3, effective July 9 2026** (see Analyst 2 Swap section below)
+- ~~**Kimi K2 via NVIDIA NIM:** Analyst 2 (free tier, model: moonshotai/kimi-k2.6)~~ — **replaced by Hy3, effective July 9 2026**
+- ~~**Hy3 via OpenRouter:** Analyst 2 (free tier, model: tencent/hy3:free)~~ — **replaced by Kimi K3, effective July 17 2026** (see Analyst 2 Swap: Hy3 → Kimi K3 section below)
 - **Endpoint:** https://integrate.api.nvidia.com/v1/chat/completions
 - **Critic:** Referee — reads both outputs, issues PASS/FLAG/VETO, logs both reasonings to decisions_log.csv
 - Agreement between Andy and Kimi raises confidence toward PASS
@@ -106,6 +109,20 @@
 - **SECOND BUG FIXED (July 9, same day):** `critic.py`'s `parse_verdict()` did strict `line.startswith("VERDICT:")` / `"REASON:"` / `"CONFIDENCE_IN_VERDICT:"` matching, but Claude Haiku's actual responses wrap these in markdown bold (`**VERDICT: FLAG**`), which never matched — so `verdict` and `confidence` silently defaulted to `"UNKNOWN"` on every run, and `reason` fell back to the entire raw response.
   - **Fix:** `parse_verdict()` now strips `*` characters before line-matching, and extracts the canonical PASS/FLAG/VETO and LOW/MEDIUM/HIGH values via regex (`\b(PASS|FLAG|VETO)\b`, `\b(LOW|MEDIUM|HIGH)\b`) rather than assuming the value is a clean tail-string after the label — robust to markdown wrapping and stray punctuation. Backwards compatible with the old plain (non-bold) format.
   - **Verified:** unit-tested against both the exact markdown-bold response text observed during the July 9 test and the original plain format; both parse correctly. Then re-ran `critic.py` live against today's real UP signal — verdict resolved to `FLAG` / confidence `HIGH` (previously `UNKNOWN` / `UNKNOWN`), and `trade_logic.py` correctly read `Critic verdict: FLAG` downstream.
+
+## Analyst 2 Swap: Hy3 → Kimi K3 — COMPLETED (July 17)
+- **Reason:** Peter requested Kimi K3 as Analyst 2 in place of Hy3 (no failure with Hy3 — this was a deliberate upgrade, not a break-fix like the June 9 Kimi K2/NVIDIA swap).
+- **Endpoint changed mid-task:** original spec was Moonshot AI's own API (`https://api.moonshot.cn/v1/chat/completions`, model `kimi-k3`, key `MOONSHOT_API_KEY`). Live-tested and ruled out:
+  - `api.moonshot.cn` returned `401 Invalid Authentication` for the provisioned key — that key authenticates against the *international* `api.moonshot.ai` platform, not the China (`.cn`) platform; Moonshot keys are platform-specific and not interchangeable.
+  - Even on the correct `.ai` platform, the account returned `429`, "suspended due to insufficient balance" — never funded.
+  - **Decision:** rather than fund/debug a second billing account, switched to routing Kimi K3 through the already-connected OpenRouter account (same provider Hy3 used), model ID `moonshotai/kimi-k3` (verified against OpenRouter's live `/v1/models` catalog first — the model exists, 1M context, image+text input). `MOONSHOT_API_KEY` was added to `.env` for the original approach but is **unused** by the final code — left in `.env` harmlessly in case direct Moonshot API access is revisited later.
+  - **Cost note:** unlike Hy3 (`tencent/hy3:free`), `moonshotai/kimi-k3` is a paid model on OpenRouter ($3/M prompt tokens, $15/M completion tokens). The OpenRouter account had never purchased credits (only ever used Hy3's free tier) — first live test hit `402 Insufficient credits` until Peter added credits at openrouter.ai/settings/credits.
+- **Swap:** `run_pipeline.sh` now calls `scripts/kimi_k3_reasoning.py` instead of `scripts/hy3_reasoning.py` as Analyst 2.
+- **scripts/kimi_k3_reasoning.py** mirrors `hy3_reasoning.py` line-for-line except: OpenRouter model `moonshotai/kimi-k3` instead of `tencent/hy3:free`, persona renamed "Kimi K3" throughout the system prompt and print statements, logs to `logs/kimi_k3_reasoning_log.csv` (column `kimi_k3_reasoning`) instead of Hy3's log.
+- **critic.py updated to match** — same required step as the June 9 swap, not optional: renamed `get_hy3_reasoning()` → `get_kimi_k3_reasoning()`, now reads `logs/kimi_k3_reasoning_log.csv` (column `kimi_k3_reasoning`); system prompt and message-building text updated from "Hy3" to "Kimi K3" throughout.
+- **decisions_log.csv column naming:** the CSV writer now labels the analyst-2 column `kimi_k3_reasoning` for any file created fresh. The existing live `decisions_log.csv` keeps its current header (`hy3_reasoning`, from the June 9 swap) — append-only, header only written once on file creation. New rows' analyst-2 column now *contains* Kimi K3's text under the stale `hy3_reasoning` header label; this is cosmetic only (DictReader still reads the column correctly by position/name match to the header, whatever it's labeled) and matches the exact precedent from the June 9 swap.
+- **hy3_reasoning.py left fully intact** — not deleted, not modified, just no longer called from run_pipeline.sh. Can be run manually (`python3 scripts/hy3_reasoning.py`) any time.
+- **Tested live (July 17):** ran signal_logger.py → news_context.py → kimi_k3_reasoning.py → andy_reasoning.py → critic.py → trade_logic.py back-to-back against today's real DOWN signal (SPY, 80% confidence). Kimi K3 returned a substantive, critical analysis via OpenRouter; Critic's verdict explicitly referenced "Kimi K3" by name and synthesized both analysts' shared caveats (stalled-at-MA50 consolidation, not a confirmed breakdown) into a FLAG verdict; trade_logic.py correctly read the FLAG verdict downstream (`ENTER DOWN`, 0.5x size). Confirms the wiring works end-to-end, not just that the scripts run individually.
 
 ## Entry/Exit Logic — COMPLETED (scripts/trade_logic.py)
 - Long entry: MACD above signal + RSI < 70 + histogram positive + confidence > 51%
@@ -174,8 +191,8 @@
 - **NVIDIA NIM:** Connected (scripts/kimi_reasoning.py). Model moonshotai/kimi-k2.6.
 - **FRED API:** Connected (scripts/fred_data.py). Pulling FEDFUNDS, CPIAUCSL, UNRATE.
 - **CNN Fear and Greed Index:** Connected (scripts/fear_greed.py). Required full browser-style headers (User-Agent + Accept + Referer) to bypass a 418 bot-blocking error — bare User-Agent alone is not enough.
-- **OpenRouter:** Connected (scripts/hy3_reasoning.py). Model tencent/hy3:free. OPENROUTER_API_KEY added to .env to authenticate.
-- **.env now holds 7 keys:** ANTHROPIC_API_KEY, NVIDIA_API_KEY, ALPACA_API_KEY, ALPACA_SECRET_KEY, FRED_API_KEY, TELEGRAM_CHAT_ID, OPENROUTER_API_KEY (OpenRouter added July 7 for Hy3 access).
+- **OpenRouter:** Connected (scripts/hy3_reasoning.py, scripts/kimi_k3_reasoning.py as of July 17). Models tencent/hy3:free and moonshotai/kimi-k3 (paid). OPENROUTER_API_KEY added to .env to authenticate.
+- **.env now holds 8 keys:** ANTHROPIC_API_KEY, NVIDIA_API_KEY, ALPACA_API_KEY, ALPACA_SECRET_KEY, FRED_API_KEY, TELEGRAM_CHAT_ID, OPENROUTER_API_KEY (OpenRouter added July 7 for Hy3 access), MOONSHOT_API_KEY (added July 17 for a direct-Moonshot-API approach that was ultimately not used — see Analyst 2 Swap: Hy3 → Kimi K3 — kept in .env harmlessly).
 - **SECURITY NOTE:** Anthropic and NVIDIA keys were exposed in full in a Claude.ai chat session on June 16. Peter made an informed decision not to rotate them at the time (low perceived risk, personal project). Alpaca and FRED keys were never exposed (typed directly into nano).
 - **NVIDIA_API_KEY rotated (July 7):** the old key started returning 403 "Authorization failed" from NVIDIA's endpoint — confirmed structurally clean (no whitespace/quotes/malformed characters) but revoked/invalid server-side. Rotated to a fresh key generated at build.nvidia.com; verified with a live 200 OK against the NIM endpoint and a successful kimi_reasoning.py run. Unrelated to the June 16 exposure — this was an independent revocation.
 - **ANTHROPIC_API_KEY fixed (July 6):** the .env line was corrupted with a literal trailing shell-command fragment (`/' ~/trading-system/.env`), likely from a botched `sed -i` replacement that wrote its own argument text into the file instead of executing. Rewritten as a clean single-line value.
@@ -244,7 +261,8 @@
 15. ✅ Hy3 added as optional third-analyst candidate (July 7) — scripts/hy3_reasoning.py via OpenRouter (tencent/hy3:free, free until July 21 2026), for manual comparison against Kimi
 16. ✅ Hy3 replaced Kimi as Analyst 2 in run_pipeline.sh (July 9) — NVIDIA NIM access to moonshotai/kimi-k2.6 broke (404, account-level entitlement issue, not a key problem). critic.py updated to read Hy3's log instead of Kimi's. kimi_reasoning.py left intact for manual use.
 17. ✅ Two pre-existing bugs found during the Hy3 swap fixed same day (July 9) — decisions_log.csv's stale 9-col header (vs. 10 cols actually written since June 23) was shifting critic_verdict/critic_reason/critic_confidence by one column for every downstream reader; critic.py's parse_verdict() didn't match Claude Haiku's markdown-bold VERDICT/REASON/CONFIDENCE format and silently defaulted to UNKNOWN. Both fixed and verified live — see Analyst 2 Swap section for detail.
-18. ⬜ Live trading with $5,000-$10,000 capital on MES (after Alpaca validation proves out)
+18. ✅ Kimi K3 replaced Hy3 as Analyst 2 in run_pipeline.sh (July 17) — deliberate upgrade, not a break-fix. Routed via OpenRouter (moonshotai/kimi-k3, paid) after the originally-specified direct Moonshot API (api.moonshot.cn) turned out to need a different Moonshot platform/account. critic.py updated to read Kimi K3's log instead of Hy3's. hy3_reasoning.py left intact for manual use. See Analyst 2 Swap: Hy3 → Kimi K3 section for detail.
+19. ⬜ Live trading with $5,000-$10,000 capital on MES (after Alpaca validation proves out)
 12. ⬜ Live trading with $5,000-$10,000 capital on MES (after Alpaca validation proves out, requires funding live Tradovate)
 13. ⬜ Scale up, add QQQ, crypto, FOREX instruments
 14. ⬜ Semi-autopilot with Claude Code + broker API executor
@@ -312,10 +330,13 @@ cd ~/trading-system && bash scripts/run_pipeline.sh
 # Run signal logger only
 cd ~/trading-system && python3 scripts/signal_logger.py
 
-# Run Hy3 reasoning only (Analyst 2, as of July 9)
+# Run Kimi K3 reasoning only (Analyst 2, as of July 17)
+cd ~/trading-system && python3 scripts/kimi_k3_reasoning.py
+
+# Run Hy3 reasoning manually (no longer in pipeline, replaced by Kimi K3 July 17)
 cd ~/trading-system && python3 scripts/hy3_reasoning.py
 
-# Run Kimi reasoning manually (no longer in pipeline — check if NVIDIA access is restored)
+# Run Kimi K2 reasoning manually (no longer in pipeline — check if NVIDIA access is restored)
 cd ~/trading-system && python3 scripts/kimi_reasoning.py
 
 # Run trade logic only (reads latest decisions_log.csv row)
@@ -375,5 +396,5 @@ cd ~/trading-system && source venv/bin/activate && bash scripts/run_pipeline.sh
 ```
 
 ## Last Updated
-2026-07-16 18:00:12
-**Last Signal:** 2026-07-16 18:00:03,SPY,NEUTRAL,0.0,750.72,Price $750.72 above MA50 $742.81 and MA200 $693.01: bullish structure | RSI 54.7: bullish | MACD above signal: bullish | MACD histogram neutral: no vote | VERDICT: NEUTRAL — bull_votes=2 bear_votes=0 did not meet MIN_VOTES=3
+2026-07-17 13:11:45
+**Last Signal:** 2026-07-17 13:11:37,SPY,DOWN,80,743.15,Price $743.15 above MA50 $743.23 and MA200 $693.44: mixed structure | RSI 48.7: bearish | MACD below signal: bearish | MACD histogram falling: bearish | Volume 53.0M neutral
