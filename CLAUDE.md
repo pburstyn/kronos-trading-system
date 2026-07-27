@@ -90,7 +90,7 @@
 - ~~**Kimi K2 via NVIDIA NIM:** Analyst 2 (free tier, model: moonshotai/kimi-k2.6)~~ — **replaced by Hy3, effective July 9 2026**
 - ~~**Hy3 via OpenRouter:** Analyst 2 (free tier, model: tencent/hy3:free)~~ — **replaced by Kimi K3, effective July 17 2026** (see Analyst 2 Swap: Hy3 → Kimi K3 section below)
 - **Endpoint:** https://integrate.api.nvidia.com/v1/chat/completions
-- **Critic:** Referee — reads both outputs, issues PASS/FLAG/VETO, logs both reasonings to decisions_log.csv
+- **Critic:** Referee (Claude Opus 5 as of July 27 — see Critic Model Upgrade section below) — reads both outputs, issues PASS/FLAG/VETO, logs both reasonings to decisions_log.csv
 - Agreement between Andy and Kimi raises confidence toward PASS
 - Disagreement triggers FLAG with Critic explaining which analyst is more credible
 - Validated against June 10 historical signal: both analysts independently flagged the same 90%-confidence-vs-bullish-structure contradiction; Critic correctly synthesized into FLAG, HIGH confidence
@@ -125,6 +125,16 @@
 - **decisions_log.csv column naming:** the CSV writer now labels the analyst-2 column `kimi_k3_reasoning` for any file created fresh. The existing live `decisions_log.csv` keeps its current header (`hy3_reasoning`, from the June 9 swap) — append-only, header only written once on file creation. New rows' analyst-2 column now *contains* Kimi K3's text under the stale `hy3_reasoning` header label; this is cosmetic only (DictReader still reads the column correctly by position/name match to the header, whatever it's labeled) and matches the exact precedent from the June 9 swap.
 - **hy3_reasoning.py left fully intact** — not deleted, not modified, just no longer called from run_pipeline.sh. Can be run manually (`python3 scripts/hy3_reasoning.py`) any time.
 - **Tested live (July 17):** ran signal_logger.py → news_context.py → kimi_k3_reasoning.py → andy_reasoning.py → critic.py → trade_logic.py back-to-back against today's real DOWN signal (SPY, 80% confidence). Kimi K3 returned a substantive, critical analysis via OpenRouter; Critic's verdict explicitly referenced "Kimi K3" by name and synthesized both analysts' shared caveats (stalled-at-MA50 consolidation, not a confirmed breakdown) into a FLAG verdict; trade_logic.py correctly read the FLAG verdict downstream (`ENTER DOWN`, 0.5x size). Confirms the wiring works end-to-end, not just that the scripts run individually.
+
+## Critic Model Upgrade: Haiku → Claude Opus 5 — COMPLETED (July 27)
+- **Reason:** Peter requested Claude Opus 5 as the Critic's model in place of Haiku — a deliberate upgrade for the referee role, not a break-fix.
+- **Swap:** `scripts/critic.py`'s `ask_critic()` now calls `model="claude-opus-5"` instead of `model="claude-haiku-4-5-20251001"`.
+- **Two required follow-on fixes, not optional — both stem from Opus 5 having thinking on by default (unlike Haiku):**
+  1. **`max_tokens` raised from 250 to 2000.** `max_tokens` caps thinking + response text combined on Opus 5; the old 250-token ceiling sized for a short Haiku reply would truncate mid-thought once thinking is included.
+  2. **Response parsing fixed to find the text block instead of assuming `content[0]`.** With thinking on by default, `response.content[0]` is a `ThinkingBlock`, not a `TextBlock` — `response.content[0].text` raised `AttributeError: 'ThinkingBlock' object has no attribute 'text'` on first live test. Fixed by iterating `response.content` for the first block with `block.type == "text"`.
+- **Tested live (July 27):** ran signal_logger.py → news_context.py → andy_reasoning.py → kimi_k3_reasoning.py → critic.py back-to-back against today's real DOWN signal (SPY, 80% confidence, $739.09). Critic returned a substantive verdict — FLAG, HIGH confidence — that caught a factual error in Andy's reasoning (mislabeling CNN Fear & Greed 39.9 as "panic" when it's mild fear, and treating an 8% oil crash as bearish when it's disinflationary). decisions_log.csv row confirmed clean: `critic_verdict` = FLAG, `critic_confidence` = HIGH, correctly read downstream.
+- **Comment in `parse_verdict()` updated** from "Claude Haiku sometimes wraps..." to "Claude sometimes wraps..." since the model-specific attribution no longer applies.
+- **andy_reasoning.py (Analyst 1) left on Haiku** — this swap was scoped to the Critic only.
 
 ## Entry/Exit Logic — COMPLETED (scripts/trade_logic.py)
 - Long entry: MACD above signal + RSI < 70 + histogram positive + confidence > 51%

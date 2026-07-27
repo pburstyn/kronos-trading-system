@@ -62,15 +62,20 @@ def ask_critic(row):
         msg += " (Kimi K3 analysis not available for this signal.)"
     msg += " Issue your verdict now."
     response = client.messages.create(
-        model="claude-haiku-4-5-20251001",
-        max_tokens=250,
+        model="claude-opus-5",
+        max_tokens=2000,
         system=CRITIC_SYSTEM_PROMPT,
         messages=[{"role": "user", "content": msg}]
     )
-    return response.content[0].text
+    # Opus 5 has thinking on by default, so content[0] is a ThinkingBlock, not
+    # TextBlock -- find the text block instead of assuming position 0.
+    for block in response.content:
+        if block.type == "text":
+            return block.text
+    return ""
 
 def parse_verdict(critic_response):
-    # Claude Haiku sometimes wraps labels/values in markdown bold
+    # Claude sometimes wraps labels/values in markdown bold
     # (e.g. "**VERDICT: FLAG**"), which a plain startswith("VERDICT:")
     # never matches — strip markdown emphasis before line-matching.
     cleaned = critic_response.replace("*", "")
