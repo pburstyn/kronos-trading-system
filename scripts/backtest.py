@@ -9,6 +9,15 @@ TICKER = "SPY"
 MIN_VOTES = 3
 MIN_CONFIDENCE = 70.0
 OUTPUT_FILE = os.path.expanduser("~/trading-system/logs/backtest_results.csv")
+BRACKET_GRID_OUTPUT_FILE = os.path.expanduser("~/trading-system/logs/backtest_bracket_grid.csv")
+
+# Grid tested against the actual GTC-bracket structure alpaca_execute.py places live:
+# market entry at signal close, fixed stop-loss %, fixed take-profit %, held open
+# until one leg hits (no time limit) -- this is what's actually being validated,
+# not just next-day directional accuracy.
+STOP_LOSS_GRID = [1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0]
+TAKE_PROFIT_GRID = [2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0]
+BRACKET_NOTIONAL = 1000  # matches live PASS-verdict sizing, for dollar PnL reporting
 
 def get_historical_data(ticker):
     df = yf.download(ticker, start="2023-01-01", end=datetime.today().strftime("%Y-%m-%d"), interval="1d", progress=False)
@@ -92,6 +101,132 @@ def generate_signal(latest, prev):
     confidence = round(min(max(base, 0), 99.0), 2)
     return direction, confidence, vote_log
 
+def simulate_bracket_trades(df, signals, stop_pct, tp_pct):
+    """Walk forward day-by-day from each signal, using daily high/low to check
+    which leg (stop or take-profit) a GTC bracket would hit first -- mirrors
+    alpaca_execute.py's actual order structure. If both legs are touched on
+    the same day, conservatively assumes stop-loss triggers first (standard
+    daily-bar backtest assumption, since intraday sequencing is unknown from
+    daily OHLC). Trades that never resolve by the end of the dataset are
+    marked OPEN and marked-to-market at the last available close."""
+    trades = []
+    n = len(df)
+    for i, direction, confidence in signals:
+        entry = float(df.iloc[i]["close"])
+        entry_date = df.iloc[i]["date"]
+        if direction == "UP":
+            stop_price = entry * (1 - stop_pct / 100)
+            tp_price = entry * (1 + tp_pct / 100)
+        else:
+            stop_price = entry * (1 + stop_pct / 100)
+            tp_price = entry * (1 - tp_pct / 100)
+
+        exit_reason = None
+        exit_price = None
+        holding_days = None
+        for j in range(i + 1, n):
+            day = df.iloc[j]
+            high = float(day["high"])
+            low = float(day["low"])
+            if direction == "UP":
+                hit_stop = low <= stop_price
+                hit_tp = high >= tp_price
+            else:
+                hit_stop = high >= stop_price
+                hit_tp = low <= tp_price
+            if hit_stop:
+                exit_reason = "STOP_LOSS"
+                exit_price = stop_price
+                holding_days = j - i
+                break
+            elif hit_tp:
+                exit_reason = "TAKE_PROFIT"
+                exit_price = tp_price
+                holding_days = j - i
+                break
+
+        if exit_reason is None:
+            exit_reason = "OPEN"
+            exit_price = float(df.iloc[n - 1]["close"])
+            holding_days = (n - 1) - i
+
+        if direction == "UP":
+            pnl_pct = (exit_price - entry) / entry * 100
+        else:
+            pnl_pct = (entry - exit_price) / entry * 100
+
+        trades.append({
+            "entry_date": str(entry_date.date()) if hasattr(entry_date, "date") else str(entry_date),
+            "direction": direction,
+            "entry": round(entry, 2),
+            "exit_reason": exit_reason,
+            "exit_price": round(exit_price, 2),
+            "holding_days": holding_days,
+            "pnl_pct": pnl_pct,
+        })
+    return trades
+
+def run_bracket_grid(df, signals):
+    grid_results = []
+    for stop_pct in STOP_LOSS_GRID:
+        for tp_pct in TAKE_PROFIT_GRID:
+            trades = simulate_bracket_trades(df, signals, stop_pct, tp_pct)
+            resolved = [t for t in trades if t["exit_reason"] != "OPEN"]
+            wins = [t for t in resolved if t["exit_reason"] == "TAKE_PROFIT"]
+            n_trades = len(trades)
+            n_resolved = len(resolved)
+            win_rate = round(len(wins) / n_resolved * 100, 1) if n_resolved else 0.0
+            total_pnl_pct = sum(t["pnl_pct"] for t in trades)
+            total_pnl_dollars = sum(t["pnl_pct"] / 100 * BRACKET_NOTIONAL for t in trades)
+            avg_holding = round(sum(t["holding_days"] for t in trades) / n_trades, 1) if n_trades else 0.0
+            grid_results.append({
+                "stop_loss_pct": stop_pct,
+                "take_profit_pct": tp_pct,
+                "trades": n_trades,
+                "resolved": n_resolved,
+                "still_open": n_trades - n_resolved,
+                "win_rate_pct": win_rate,
+                "avg_holding_days": avg_holding,
+                "total_pnl_pct": round(total_pnl_pct, 2),
+                "total_pnl_dollars": round(total_pnl_dollars, 2),
+            })
+    return grid_results
+
+def print_and_save_grid(grid_results):
+    os.makedirs(os.path.dirname(BRACKET_GRID_OUTPUT_FILE), exist_ok=True)
+    fieldnames = ["stop_loss_pct", "take_profit_pct", "trades", "resolved", "still_open",
+                  "win_rate_pct", "avg_holding_days", "total_pnl_pct", "total_pnl_dollars"]
+    with open(BRACKET_GRID_OUTPUT_FILE, "w", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=fieldnames)
+        writer.writeheader()
+        writer.writerows(grid_results)
+
+    ranked = sorted(grid_results, key=lambda r: r["total_pnl_dollars"], reverse=True)
+
+    print("\n--- BRACKET GRID RESULTS (GTC entry/stop/take-profit, sorted by total PnL $) ---")
+    print(f"{'Stop%':>6} {'TP%':>5} {'Trades':>7} {'Open':>5} {'WinRate%':>9} {'AvgDays':>8} {'TotalPnL%':>10} {'TotalPnL$':>10}")
+    for r in ranked:
+        print(f"{r['stop_loss_pct']:>6.1f} {r['take_profit_pct']:>5.1f} {r['trades']:>7} "
+              f"{r['still_open']:>5} {r['win_rate_pct']:>9.1f} {r['avg_holding_days']:>8.1f} "
+              f"{r['total_pnl_pct']:>10.2f} {r['total_pnl_dollars']:>10.2f}")
+
+    best = ranked[0]
+    print(f"\nBest combo by total PnL: stop={best['stop_loss_pct']}% / TP={best['take_profit_pct']}% "
+          f"-> {best['win_rate_pct']}% win rate, ${best['total_pnl_dollars']:.2f} total PnL "
+          f"over {best['trades']} trades ({best['still_open']} still open at end of data)")
+
+    live_rows = [r for r in grid_results if r["stop_loss_pct"] == 2.0 and r["take_profit_pct"] in (3.0, 5.0)]
+    for live in sorted(live_rows, key=lambda r: r["take_profit_pct"]):
+        rank = ranked.index(live) + 1
+        print(f"\nCurrent live setting (stop=2%, TP={live['take_profit_pct']:.0f}%, the low/high end of "
+              f"trade_logic.py's 3-5% range): rank #{rank} of {len(ranked)} by total PnL "
+              f"-> {live['win_rate_pct']}% win rate, ${live['total_pnl_dollars']:.2f} total PnL")
+
+    print(f"\nFull grid saved to: {BRACKET_GRID_OUTPUT_FILE}")
+    print("Note: assumes stop-loss triggers first when both legs are touched same day (conservative);")
+    print("'still open' trades are marked-to-market at the last available close and included in total PnL,")
+    print("but excluded from the win-rate denominator since they haven't actually resolved.")
+
 def run():
     print("Downloading SPY data from 2023-01-01...")
     df = get_historical_data(TICKER)
@@ -101,6 +236,7 @@ def run():
     df = df.reset_index(drop=True)
     os.makedirs(os.path.dirname(OUTPUT_FILE), exist_ok=True)
     results = []
+    signals = []
     total = 0
     correct = 0
     signals_fired = 0
@@ -114,6 +250,7 @@ def run():
         else:
             signals_fired += 1
             total += 1
+            signals.append((i, direction, confidence))
             next_return = float(next_day["close"]) - float(latest["close"])
             if direction == "UP" and next_return > 0:
                 outcome = "CORRECT"
@@ -148,6 +285,11 @@ def run():
         print("EDGE DETECTED. Continue to paper trading.")
     else:
         print("NO EDGE. Revise signals before paper trading.")
+
+    print(f"\nSimulating GTC bracket outcomes for {len(signals)} fired signals across "
+          f"{len(STOP_LOSS_GRID)}x{len(TAKE_PROFIT_GRID)} stop/take-profit combinations...")
+    grid_results = run_bracket_grid(df, signals)
+    print_and_save_grid(grid_results)
 
 if __name__ == "__main__":
     run()

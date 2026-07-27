@@ -35,8 +35,9 @@
 - `logs/decisions_log.csv` — Andy + Critic decisions
 - `logs/pipeline.log` — Pipeline run log
 - `logs/dashboard.html` — Visual dashboard
-- `logs/backtest_results.csv` — SPY backtest results
+- `logs/backtest_results.csv` — SPY backtest results (next-day directional accuracy)
 - `logs/backtest_qqq.csv` — QQQ backtest results
+- `logs/backtest_bracket_grid.csv` — GTC bracket stop-loss/take-profit grid backtest (49 combos, win rate + PnL per combo), written by scripts/backtest.py as of July 27. See Phase 3 Bracket Grid Backtest section.
 - `logs/news_cache.json` — Daily financial headlines cache written by news_context.py, read by andy and kimi
 - `logs/intraday_price_log.csv` — SPY price sampled every 15 min during market hours (standalone, not pipeline)
 - `logs/alpaca_orders.csv` — Submitted Alpaca paper orders (order ID, direction, notional, stop/take-profit levels)
@@ -171,10 +172,23 @@
 |------|-----------|-------|------|----|---------|------|-------------|-------|--------|--------|
 | 2026-06-25 | DOWN | $734.30 | $748.99 | $712.27 | FLAG | $748.99 | STOP_LOSS | −$20.65 | −2.81% | CLOSED |
 | 2026-06-26 | DOWN | $728.99 | $743.57 | $707.12 | FLAG | $746.77 | STOP_LOSS | −$17.78 | −2.44% | CLOSED |
+| 2026-07-10 | UP | $754.95 | $739.85 | $777.60–$792.70 | FLAG | $738.30 | STOP_LOSS | −$16.65 | −2.21% | CLOSED |
+| 2026-07-15 | UP | $754.81 | $739.71 | $777.45–$792.55 | FLAG | $738.30 | STOP_LOSS | −$16.51 | −2.19% | CLOSED |
 
-- **Running record:** 0 wins / 2 losses. Both stopped out on SPY rally to ~$750.
+- **Running record: 0 wins / 4 losses.** All four stopped out — the two June DOWN trades on SPY's rally to ~$750, the two July UP trades on the subsequent drift back down through ~$738 (both hit stop the same day, July 23, 13 and 8 days after entry respectively).
+- **Currently open (real Alpaca position, not in this table until resolved):** DOWN, entered 2026-07-23 at $739.34 fill, stop $754.13, take-profit $717.16, FLAG verdict, order ID `4c47ec86`.
 - **Note on June 25 P&L:** Alpaca filled the short at $728.34 at Friday open (not the signal's $734.30 last close); Alpaca bracket stop triggered at $748.99. P&L calculated on actual fill price.
-- **outcome_tracker.py limitation:** uses daily closing price — does not catch intraday stop hits. June 25 trade showed OPEN until manually corrected on July 2. June 26 trade was caught by outcome_tracker at 6pm close on June 30.
+- **outcome_tracker.py limitation:** uses daily closing price — does not catch intraday stop hits. June 25 trade showed OPEN until manually corrected on July 2. June 26 trade was caught by outcome_tracker at 6pm close on June 30. July 10 and July 15 trades both showed OPEN until outcome_tracker caught the stop-loss hit on July 23.
+- **Diagnosis (July 27 backtest, see Phase 3 Bracket Grid Backtest section below):** the losses are not single-day volatility outrunning a 2% stop — daily close-to-close moves average 0.51% and intraday range has never exceeded 1.46% in 5 weeks of data. The real pattern is multi-day drift against GTC brackets held open 8-13+ days with no time limit, in a market that's spent this window chopping in a range rather than trending. A wider stop alone doesn't fix that; see the grid backtest for what does better historically.
+- **Two parallel trackers, different counts:** `logs/paper_trades.csv` (simulated via auto_logger/outcome_tracker) has no "no-stacking" rule and shows several more OPEN rows than Alpaca ever actually held — `alpaca_orders.csv` / the real paper account is the ground truth for exposure (3 orders submitted total: June 25, July 6, July 23; only one held open at a time, by design).
+
+## Phase 3 Bracket Grid Backtest — COMPLETED (July 27)
+- **Purpose:** validate the fixed 2%-stop/3-5%-TP bracket structure against history before deciding whether/how to change it, rather than reacting to the 4-trade live sample alone.
+- **Extended `scripts/backtest.py`** with `simulate_bracket_trades()` / `run_bracket_grid()`: for every historically fired signal (309 signals, 2023-01-01–present, same generate_signal() logic as the existing accuracy backtest), walks forward day-by-day using daily high/low to find which leg — stop-loss or take-profit — a GTC bracket would hit first, exactly mirroring `alpaca_execute.py`'s real order structure (market entry at signal close, fixed % stop, fixed % take-profit, held open with no time limit). If both legs are touched the same day, conservatively assumes stop-loss hits first (daily OHLC can't resolve intraday sequencing). Trades unresolved by the end of the dataset are marked OPEN and marked-to-market at the last close.
+- **Grid tested:** stop-loss 1.0%–4.0% (0.5% steps, 7 values) × take-profit 2.0%–8.0% (1% steps, 7 values) = 49 combinations, $1,000 notional per trade for dollar PnL.
+- **Output:** `logs/backtest_bracket_grid.csv` (full 49-row grid: win rate, avg holding days, total PnL % and $ per combo), printed to console ranked by total PnL.
+- **Result:** best combo by total PnL was stop=2.0%/TP=7.0% (31.2% win rate, $2,457.97 total PnL, 24.2 avg holding days, 5/309 still open at dataset end). The current live setting (stop=2%, TP=3–5%) ranked #31 and #14 of 49 respectively ($907.97 and $1,677.97) — both historically profitable, just not the top of the grid. Historical win rate at the live 2%/3% setting was 46.1% — well above the 0/4 seen live, suggesting the live losing streak is at least partly a small-sample/regime effect (choppy month) rather than proof the setting is broken.
+- **Not yet decided:** whether to change live stop/TP settings based on this — total-PnL-optimal cells (TP 6-8%) also have the widest avg holding periods (20-40+ days) and lower win rates (~25-40%), which trades win-rate/psychological-tolerance for size of win; needs a decision on which tradeoff Peter wants before changing `trade_logic.py`'s `STOP_LOSS_PCT`/`TAKE_PROFIT_PCT_LOW`/`TAKE_PROFIT_PCT_HIGH`.
 
 ## Telegram Notifications — COMPLETED (June 20)
 - **Bot:** @Peters_Open_Claw_Bot (same bot OpenClaw/Andy uses). No new bot needed.
@@ -388,13 +402,16 @@ tail -3 ~/trading-system/logs/signal_log.csv
 # Run EMA comparison
 cd ~/trading-system && python3 scripts/compare_ema_rsi.py
 
-# Run SPY backtest
+# Run SPY backtest (next-day accuracy + GTC bracket stop/TP grid as of July 27)
 cd ~/trading-system && python3 scripts/backtest.py
+
+# Check the bracket grid backtest results (49 stop/TP combos, ranked by total PnL)
+cat ~/trading-system/logs/backtest_bracket_grid.csv
 
 # If Ubuntu restarted
 cd ~/trading-system && source venv/bin/activate && bash scripts/run_pipeline.sh
 ```
 
 ## Last Updated
-2026-07-24 18:01:23
+2026-07-27 (manual update — bracket grid backtest + paper trading results refresh)
 **Last Signal:** 2026-07-24 18:00:02,SPY,DOWN,80,738.93,MA50 $744.11 MA200 $695.43: mixed structure | RSI 45.5: bearish | MACD below signal: bearish | MACD histogram falling: bearish | Volume 41.5M neutral
