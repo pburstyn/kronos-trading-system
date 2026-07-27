@@ -22,6 +22,7 @@
 - `scripts/kimi_k3_reasoning.py` — Kimi K3 (via OpenRouter, model `moonshotai/kimi-k3`) reasons about the signal. **Analyst 2 in run_pipeline.sh as of July 17**, replacing Hy3. Paid model ($3/M prompt, $15/M completion tokens) — not free tier like Hy3. Mirrors hy3_reasoning.py's structure exactly (macro/sentiment/news context, same prompt shape). Logs to logs/kimi_k3_reasoning_log.csv.
 - `scripts/trade_logic.py` — Entry/exit decision engine: confidence floor, verdict-based position sizing, stop-loss/take-profit calculation
 - `scripts/alpaca_execute.py` — Places bracket paper orders on Alpaca when trade_logic.py says ENTER; checks for existing exposure before submitting; logs to logs/alpaca_orders.csv
+- `scripts/position_reconfirm.py` — **Added July 27.** Wired into run_pipeline.sh after alpaca_execute.py. Checks today's decisions_log.csv direction against any currently open Alpaca SPY position; if they disagree (e.g. an open SHORT position while today's fresh signal is UP), sends a Telegram alert flagging the contradiction so Peter can review manually — does NOT close the position automatically. Silent (no alert) when flat, when today's signal is NEUTRAL, when the signal agrees with the open position, or when decisions_log.csv is stale (not today). Fills a gap alpaca_execute.py's own no-stacking check doesn't cover: that check silently skips submitting a new order when exposure already exists, but never tells Peter the new signal actually disagrees with the position he's holding.
 - `scripts/news_context.py` — Fetches today's top financial headlines via Alpaca News API (no new key needed — uses existing ALPACA_API_KEY). Filters by keywords (Fed, inflation, oil, Iran, earnings, S&P, interest rate, etc.). Caches to logs/news_cache.json. Andy and Kimi call get_news_context() to read from cache — API called once per pipeline run.
 - `scripts/telegram_notify.py` — Sends Telegram message to Peter via @Peters_Open_Claw_Bot when pipeline fires an ENTER decision. Skips silently on NEUTRAL/VETO/stale signals. Reads botToken from openclaw.json, chat ID from .env (TELEGRAM_CHAT_ID).
 - `scripts/intraday_logger.py` — **Standalone, pipeline-independent.** Pulls SPY's last trade price from Alpaca and appends to logs/intraday_price_log.csv. Runs via cron every 15 min during market hours only (ET check inside script). Does not touch the trading pipeline in any way.
@@ -277,6 +278,7 @@
 17. ✅ Two pre-existing bugs found during the Hy3 swap fixed same day (July 9) — decisions_log.csv's stale 9-col header (vs. 10 cols actually written since June 23) was shifting critic_verdict/critic_reason/critic_confidence by one column for every downstream reader; critic.py's parse_verdict() didn't match Claude Haiku's markdown-bold VERDICT/REASON/CONFIDENCE format and silently defaulted to UNKNOWN. Both fixed and verified live — see Analyst 2 Swap section for detail.
 18. ✅ Kimi K3 replaced Hy3 as Analyst 2 in run_pipeline.sh (July 17) — deliberate upgrade, not a break-fix. Routed via OpenRouter (moonshotai/kimi-k3, paid) after the originally-specified direct Moonshot API (api.moonshot.cn) turned out to need a different Moonshot platform/account. critic.py updated to read Kimi K3's log instead of Hy3's. hy3_reasoning.py left intact for manual use. See Analyst 2 Swap: Hy3 → Kimi K3 section for detail.
 19. ⬜ Live trading with $5,000-$10,000 capital on MES (after Alpaca validation proves out)
+20. ✅ Daily position re-confirmation check added (July 27) — scripts/position_reconfirm.py flags via Telegram when today's fresh signal direction contradicts an already-open Alpaca position, wired into run_pipeline.sh after alpaca_execute.py
 12. ⬜ Live trading with $5,000-$10,000 capital on MES (after Alpaca validation proves out, requires funding live Tradovate)
 13. ⬜ Scale up, add QQQ, crypto, FOREX instruments
 14. ⬜ Semi-autopilot with Claude Code + broker API executor
@@ -358,6 +360,9 @@ cd ~/trading-system && python3 scripts/trade_logic.py
 
 # Run Alpaca execution only (dry-runs unless today's ENTER decision exists)
 cd ~/trading-system && python3 scripts/alpaca_execute.py
+
+# Check today's signal against any open position for a direction contradiction (sends Telegram alert if contradicted)
+cd ~/trading-system && python3 scripts/position_reconfirm.py
 
 # Check intraday price log (last 5 entries)
 tail -5 ~/trading-system/logs/intraday_price_log.csv
