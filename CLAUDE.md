@@ -428,5 +428,5 @@ cd ~/trading-system && source venv/bin/activate && bash scripts/run_pipeline.sh
 ```
 
 ## Last Updated
-2026-08-13 18:00:14
-**Last Signal:** 2026-08-13 18:00:03,SPY,NEUTRAL,0.0,777.88,Price $777.88 above MA50 $748.06 and MA200 $702.27: bullish structure | RSI 67.4: bullish | MACD above signal: bullish | MACD histogram neutral: no vote | VERDICT: NEUTRAL — bull_votes=2 bear_votes=0 did not meet MIN_VOTES=3
+2026-08-14 18:00:16
+**Last Signal:** 2026-08-14 18:00:05,SPY,NEUTRAL,0.0,776.34,Price $776.34 above MA50 $748.54 and MA200 $702.75: bullish structure | RSI 65.8: bullish | MACD above signal: bullish | MACD histogram neutral: no vote | VERDICT: NEUTRAL — bull_votes=2 bear_votes=0 did not meet MIN_VOTES=3
