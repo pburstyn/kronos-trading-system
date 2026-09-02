@@ -19,6 +19,17 @@ STOP_LOSS_GRID = [1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0]
 TAKE_PROFIT_GRID = [2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0]
 BRACKET_NOTIONAL = 1000  # matches live PASS-verdict sizing, for dollar PnL reporting
 
+# Confidence-floor / vote-threshold grid: reuses the live stop/TP (2%/3%) rather
+# than crossing all three axes, since alpaca_execute.py always submits the 3%
+# take_profit_low leg as the actual order (take_profit_high is only shown in
+# Telegram messaging, never placed) -- this isolates the entry-filter question
+# from the exit-level question already covered by the grid above.
+CONFIDENCE_GRID = [50.0, 60.0, 70.0, 80.0, 90.0]
+MIN_VOTES_GRID = [2, 3, 4]
+LIVE_STOP_PCT = 2.0
+LIVE_TP_PCT = 3.0
+CONFIDENCE_VOTES_GRID_OUTPUT_FILE = os.path.expanduser("~/trading-system/logs/backtest_confidence_votes_grid.csv")
+
 def get_historical_data(ticker):
     df = yf.download(ticker, start="2023-01-01", end=datetime.today().strftime("%Y-%m-%d"), interval="1d", progress=False)
     df.columns = [col[0].lower() if isinstance(col, tuple) else col.lower() for col in df.columns]
@@ -33,7 +44,7 @@ def compute_indicators(df):
     df["ma200"] = df["close"].rolling(200).mean()
     return df
 
-def generate_signal(latest, prev):
+def generate_signal(latest, prev, min_votes=MIN_VOTES):
     rsi = latest["rsi"]
     macd_line = latest["MACD_12_26_9"]
     macd_signal = latest["MACDs_12_26_9"]
@@ -77,10 +88,10 @@ def generate_signal(latest, prev):
     elif macd_hist < 0 and macd_hist < macd_hist_prev:
         bear_votes += 1
         vote_log.append("MACD hist falling")
-    if bull_votes >= MIN_VOTES and bull_votes > bear_votes:
+    if bull_votes >= min_votes and bull_votes > bear_votes:
         direction = "UP"
         votes = bull_votes
-    elif bear_votes >= MIN_VOTES and bear_votes > bull_votes:
+    elif bear_votes >= min_votes and bear_votes > bull_votes:
         direction = "DOWN"
         votes = bear_votes
     else:
@@ -100,6 +111,19 @@ def generate_signal(latest, prev):
     elif volume < vol_ma * 0.8: base -= 10
     confidence = round(min(max(base, 0), 99.0), 2)
     return direction, confidence, vote_log
+
+def generate_all_signals(df, min_votes):
+    """Every directional (non-NEUTRAL) signal for a given min_votes threshold,
+    at any confidence level -- confidence filtering happens downstream so this
+    only needs to be recomputed per min_votes value, not per confidence value."""
+    signals = []
+    for i in range(1, len(df) - 1):
+        latest = df.iloc[i]
+        prev = df.iloc[i - 1]
+        direction, confidence, _ = generate_signal(latest, prev, min_votes=min_votes)
+        if direction != "NEUTRAL":
+            signals.append((i, direction, confidence))
+    return signals
 
 def simulate_bracket_trades(df, signals, stop_pct, tp_pct):
     """Walk forward day-by-day from each signal, using daily high/low to check
@@ -227,6 +251,71 @@ def print_and_save_grid(grid_results):
     print("'still open' trades are marked-to-market at the last available close and included in total PnL,")
     print("but excluded from the win-rate denominator since they haven't actually resolved.")
 
+def run_confidence_votes_grid(df):
+    grid_results = []
+    for min_votes in MIN_VOTES_GRID:
+        all_signals = generate_all_signals(df, min_votes)
+        for min_confidence in CONFIDENCE_GRID:
+            filtered = [s for s in all_signals if s[2] >= min_confidence]
+            trades = simulate_bracket_trades(df, filtered, LIVE_STOP_PCT, LIVE_TP_PCT)
+            resolved = [t for t in trades if t["exit_reason"] != "OPEN"]
+            wins = [t for t in resolved if t["exit_reason"] == "TAKE_PROFIT"]
+            n_trades = len(trades)
+            n_resolved = len(resolved)
+            win_rate = round(len(wins) / n_resolved * 100, 1) if n_resolved else 0.0
+            total_pnl_pct = sum(t["pnl_pct"] for t in trades)
+            total_pnl_dollars = sum(t["pnl_pct"] / 100 * BRACKET_NOTIONAL for t in trades)
+            avg_holding = round(sum(t["holding_days"] for t in trades) / n_trades, 1) if n_trades else 0.0
+            grid_results.append({
+                "min_votes": min_votes,
+                "min_confidence_pct": min_confidence,
+                "trades": n_trades,
+                "resolved": n_resolved,
+                "still_open": n_trades - n_resolved,
+                "win_rate_pct": win_rate,
+                "avg_holding_days": avg_holding,
+                "total_pnl_pct": round(total_pnl_pct, 2),
+                "total_pnl_dollars": round(total_pnl_dollars, 2),
+            })
+    return grid_results
+
+def print_and_save_confidence_votes_grid(grid_results):
+    os.makedirs(os.path.dirname(CONFIDENCE_VOTES_GRID_OUTPUT_FILE), exist_ok=True)
+    fieldnames = ["min_votes", "min_confidence_pct", "trades", "resolved", "still_open",
+                  "win_rate_pct", "avg_holding_days", "total_pnl_pct", "total_pnl_dollars"]
+    with open(CONFIDENCE_VOTES_GRID_OUTPUT_FILE, "w", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=fieldnames)
+        writer.writeheader()
+        writer.writerows(grid_results)
+
+    ranked = sorted(grid_results, key=lambda r: r["total_pnl_dollars"], reverse=True)
+
+    print(f"\n--- CONFIDENCE FLOOR / VOTE THRESHOLD GRID (stop={LIVE_STOP_PCT}%, TP={LIVE_TP_PCT}%, sorted by total PnL $) ---")
+    print(f"{'MinVotes':>8} {'MinConf%':>8} {'Trades':>7} {'Open':>5} {'WinRate%':>9} {'AvgDays':>8} {'TotalPnL%':>10} {'TotalPnL$':>10}")
+    for r in ranked:
+        print(f"{r['min_votes']:>8} {r['min_confidence_pct']:>8.1f} {r['trades']:>7} "
+              f"{r['still_open']:>5} {r['win_rate_pct']:>9.1f} {r['avg_holding_days']:>8.1f} "
+              f"{r['total_pnl_pct']:>10.2f} {r['total_pnl_dollars']:>10.2f}")
+
+    best = ranked[0]
+    print(f"\nBest combo by total PnL: min_votes={best['min_votes']} / min_confidence={best['min_confidence_pct']}% "
+          f"-> {best['win_rate_pct']}% win rate, ${best['total_pnl_dollars']:.2f} total PnL "
+          f"over {best['trades']} trades ({best['still_open']} still open at end of data)")
+
+    live_rows = [r for r in grid_results if r["min_votes"] == MIN_VOTES and r["min_confidence_pct"] == MIN_CONFIDENCE]
+    if live_rows:
+        live = live_rows[0]
+        rank = ranked.index(live) + 1
+        print(f"\nCurrent live setting (min_votes={MIN_VOTES}, min_confidence={MIN_CONFIDENCE}%): "
+              f"rank #{rank} of {len(ranked)} by total PnL "
+              f"-> {live['win_rate_pct']}% win rate, ${live['total_pnl_dollars']:.2f} total PnL, "
+              f"{live['trades']} trades")
+
+    print(f"\nFull grid saved to: {CONFIDENCE_VOTES_GRID_OUTPUT_FILE}")
+    print("Note: entry filters only (stop/TP fixed at the live 2%/3% bracket) -- isolates whether raising the")
+    print("confidence floor or requiring more indicator agreement would have improved historical results,")
+    print("independent of the exit-level question already covered by the stop/TP grid above.")
+
 def run():
     print("Downloading SPY data from 2023-01-01...")
     df = get_historical_data(TICKER)
@@ -290,6 +379,11 @@ def run():
           f"{len(STOP_LOSS_GRID)}x{len(TAKE_PROFIT_GRID)} stop/take-profit combinations...")
     grid_results = run_bracket_grid(df, signals)
     print_and_save_grid(grid_results)
+
+    print(f"\nSimulating confidence-floor x vote-threshold grid "
+          f"({len(MIN_VOTES_GRID)}x{len(CONFIDENCE_GRID)} combinations) across full history...")
+    confidence_votes_grid_results = run_confidence_votes_grid(df)
+    print_and_save_confidence_votes_grid(confidence_votes_grid_results)
 
 if __name__ == "__main__":
     run()
