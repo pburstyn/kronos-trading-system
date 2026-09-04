@@ -428,5 +428,5 @@ cd ~/trading-system && source venv/bin/activate && bash scripts/run_pipeline.sh
 ```
 
 ## Last Updated
-2026-09-02 18:00:13
-**Last Signal:** 2026-09-02 18:00:04,SPY,NEUTRAL,0.0,nan,MA50 $nan MA200 $nan: mixed structure | RSI 48.6: bearish | MACD below signal: bearish | MACD histogram neutral: no vote | VERDICT: NEUTRAL — bull_votes=0 bear_votes=2 did not meet MIN_VOTES=3
+2026-09-03 18:00:15
+**Last Signal:** 2026-09-03 18:00:05,SPY,NEUTRAL,0.0,nan,MA50 $nan MA200 $nan: mixed structure | RSI 52.0: bullish | MACD below signal: bearish | MACD histogram neutral: no vote | VERDICT: NEUTRAL — bull_votes=1 bear_votes=1 did not meet MIN_VOTES=3
