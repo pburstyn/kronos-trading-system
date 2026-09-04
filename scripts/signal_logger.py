@@ -15,6 +15,16 @@ LOG_FILE = os.path.expanduser("~/trading-system/logs/signal_log.csv")
 def get_market_data(ticker, lookback):
     df = yf.download(ticker, period=f"{lookback}d", interval="1d", progress=False)
     df.columns = [col[0].lower() if isinstance(col, tuple) else col.lower() for col in df.columns]
+    if len(df) and pd.isna(df.iloc[-1]["close"]):
+        # yfinance's ranged history endpoint sometimes lags the single-day quote
+        # endpoint in populating the most recent bar's OHLC (volume shows up first,
+        # price columns stay NaN for hours) -- outcome_tracker.py's period="1d" call
+        # doesn't have this problem, so patch the bad row from that instead.
+        latest = yf.download(ticker, period="1d", interval="1d", progress=False)
+        latest.columns = [col[0].lower() if isinstance(col, tuple) else col.lower() for col in latest.columns]
+        if len(latest) and not pd.isna(latest.iloc[-1]["close"]):
+            df.iloc[-1, df.columns.get_indexer(["open", "high", "low", "close", "volume"])] = \
+                latest.iloc[-1][["open", "high", "low", "close", "volume"]].values
     return df
 
 def compute_indicators(df):
