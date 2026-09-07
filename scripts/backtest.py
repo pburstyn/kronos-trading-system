@@ -30,6 +30,11 @@ LIVE_STOP_PCT = 2.0
 LIVE_TP_PCT = 3.0
 CONFIDENCE_VOTES_GRID_OUTPUT_FILE = os.path.expanduser("~/trading-system/logs/backtest_confidence_votes_grid.csv")
 
+ABLATION_OUTPUT_FILE = os.path.expanduser("~/trading-system/logs/backtest_ablation.csv")
+ABLATION_FIELDNAMES = ["version", "description", "trades", "resolved", "win_rate_pct",
+                       "total_pnl_pct", "total_pnl_dollars", "profit_factor",
+                       "max_drawdown_dollars", "max_drawdown_pct"]
+
 def get_historical_data(ticker):
     df = yf.download(ticker, start="2023-01-01", end=datetime.today().strftime("%Y-%m-%d"), interval="1d", progress=False)
     df.columns = [col[0].lower() if isinstance(col, tuple) else col.lower() for col in df.columns]
@@ -316,6 +321,151 @@ def print_and_save_confidence_votes_grid(grid_results):
     print("confidence floor or requiring more indicator agreement would have improved historical results,")
     print("independent of the exit-level question already covered by the stop/TP grid above.")
 
+def compute_trade_metrics(trades):
+    """Win rate, PnL, profit factor, and max drawdown for a list of trades from
+    simulate_bracket_trades(). Equity curve is built by walking trades in
+    chronological entry order and accumulating pnl_dollars -- a reasonable
+    stand-in for a real account curve since the live system holds at most one
+    position at a time (no-stacking), not a rough approximation. Drawdown %
+    is expressed against BRACKET_NOTIONAL (the same $1,000 per-trade notional
+    convention used throughout this file), not a modeled running balance."""
+    resolved = [t for t in trades if t["exit_reason"] != "OPEN"]
+    wins = [t for t in resolved if t["exit_reason"] == "TAKE_PROFIT"]
+    n_trades = len(trades)
+    n_resolved = len(resolved)
+    win_rate = round(len(wins) / n_resolved * 100, 1) if n_resolved else 0.0
+
+    pnl_dollars_by_trade = [(t, t["pnl_pct"] / 100 * BRACKET_NOTIONAL) for t in trades]
+    total_pnl_pct = sum(t["pnl_pct"] for t in trades)
+    total_pnl_dollars = sum(pnl for _, pnl in pnl_dollars_by_trade)
+
+    gross_profit = sum(pnl for _, pnl in pnl_dollars_by_trade if pnl > 0)
+    gross_loss = abs(sum(pnl for _, pnl in pnl_dollars_by_trade if pnl < 0))
+    if gross_loss > 0:
+        profit_factor = round(gross_profit / gross_loss, 2)
+    else:
+        profit_factor = float("inf") if gross_profit > 0 else 0.0
+
+    ordered = sorted(pnl_dollars_by_trade, key=lambda tp: tp[0]["entry_date"])
+    equity = 0.0
+    peak = 0.0
+    max_dd_dollars = 0.0
+    for _, pnl in ordered:
+        equity += pnl
+        peak = max(peak, equity)
+        max_dd_dollars = max(max_dd_dollars, peak - equity)
+    max_dd_pct = round(max_dd_dollars / BRACKET_NOTIONAL * 100, 2) if BRACKET_NOTIONAL else 0.0
+
+    return {
+        "trades": n_trades,
+        "resolved": n_resolved,
+        "win_rate_pct": win_rate,
+        "total_pnl_pct": round(total_pnl_pct, 2),
+        "total_pnl_dollars": round(total_pnl_dollars, 2),
+        "profit_factor": profit_factor,
+        "max_drawdown_dollars": round(max_dd_dollars, 2),
+        "max_drawdown_pct": max_dd_pct,
+    }
+
+def compute_buy_and_hold_metrics(df):
+    """Passive buy-and-hold benchmark over the full dataset window. Unlike the
+    trade-based versions, this has only one continuous position, so profit
+    factor and max drawdown are computed from the daily-return equity curve
+    instead of per-trade PnL -- the two methodologies aren't directly
+    comparable line-for-line, only the headline win-rate/PnL numbers are."""
+    start_close = float(df.iloc[0]["close"])
+    end_close = float(df.iloc[-1]["close"])
+    total_pnl_pct = (end_close - start_close) / start_close * 100
+    total_pnl_dollars = total_pnl_pct / 100 * BRACKET_NOTIONAL
+    win_rate = 100.0 if total_pnl_pct > 0 else 0.0
+
+    daily_returns_pct = df["close"].astype(float).pct_change().dropna() * 100
+    gross_profit = daily_returns_pct[daily_returns_pct > 0].sum() / 100 * BRACKET_NOTIONAL
+    gross_loss = abs(daily_returns_pct[daily_returns_pct < 0].sum()) / 100 * BRACKET_NOTIONAL
+    if gross_loss > 0:
+        profit_factor = round(gross_profit / gross_loss, 2)
+    else:
+        profit_factor = float("inf") if gross_profit > 0 else 0.0
+
+    equity_curve = (1 + daily_returns_pct / 100).cumprod() * BRACKET_NOTIONAL
+    peak = equity_curve.cummax()
+    drawdown_dollars = peak - equity_curve
+    drawdown_pct = drawdown_dollars / peak * 100
+    max_dd_dollars = float(drawdown_dollars.max()) if len(drawdown_dollars) else 0.0
+    max_dd_pct = float(drawdown_pct.max()) if len(drawdown_pct) else 0.0
+
+    return {
+        "trades": 1,
+        "resolved": 1,
+        "win_rate_pct": round(win_rate, 1),
+        "total_pnl_pct": round(total_pnl_pct, 2),
+        "total_pnl_dollars": round(total_pnl_dollars, 2),
+        "profit_factor": profit_factor,
+        "max_drawdown_dollars": round(max_dd_dollars, 2),
+        "max_drawdown_pct": round(max_dd_pct, 2),
+    }
+
+def run_ablation_study(df):
+    all_signals = generate_all_signals(df, MIN_VOTES)
+    v1_signals = all_signals
+    v2_signals = [s for s in all_signals if s[2] >= MIN_CONFIDENCE]
+    # v3 "full system as configured" = signal_logger.py's MIN_VOTES/MIN_CONFIDENCE
+    # gate + trade_logic.py's own 51% confidence floor. Under current wiring these
+    # produce identical entries to v2: trade_logic.py never sees anything below
+    # signal_logger.py's stricter 70% gate, so its 51% floor can never bind.
+    v3_signals = v2_signals
+
+    v1_metrics = compute_trade_metrics(simulate_bracket_trades(df, v1_signals, LIVE_STOP_PCT, LIVE_TP_PCT))
+    v2_metrics = compute_trade_metrics(simulate_bracket_trades(df, v2_signals, LIVE_STOP_PCT, LIVE_TP_PCT))
+    v3_metrics = compute_trade_metrics(simulate_bracket_trades(df, v3_signals, LIVE_STOP_PCT, LIVE_TP_PCT))
+    v4_metrics = compute_buy_and_hold_metrics(df)
+
+    rows = []
+    for version, description, metrics in [
+        ("v1_technical_only", "Technical signal only, no confidence filter", v1_metrics),
+        ("v2_confidence_70", f"Technical signal + {MIN_CONFIDENCE:.0f}% confidence floor", v2_metrics),
+        ("v3_full_system", "Full system as currently configured (identical entries to v2 -- "
+                            "trade_logic.py's 51% floor never binds beneath signal_logger.py's "
+                            "70% gate)", v3_metrics),
+        ("v4_buy_and_hold", "Buy-and-hold SPY benchmark (daily-return based, not trade-based)", v4_metrics),
+    ]:
+        row = {"version": version, "description": description}
+        row.update(metrics)
+        rows.append(row)
+    return rows
+
+def print_and_save_ablation(rows):
+    os.makedirs(os.path.dirname(ABLATION_OUTPUT_FILE), exist_ok=True)
+    with open(ABLATION_OUTPUT_FILE, "w", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=ABLATION_FIELDNAMES)
+        writer.writeheader()
+        for r in rows:
+            r = dict(r)
+            if r["profit_factor"] == float("inf"):
+                r["profit_factor"] = "inf"
+            writer.writerow(r)
+
+    print(f"\n--- ABLATION STUDY (stop={LIVE_STOP_PCT}%/TP={LIVE_TP_PCT}% bracket except buy-and-hold) ---")
+    print(f"{'Version':<20} {'Trades':>7} {'WinRate%':>9} {'TotalPnL%':>10} {'TotalPnL$':>10} "
+          f"{'ProfitFactor':>13} {'MaxDD$':>8} {'MaxDD%':>8}")
+    for r in rows:
+        pf_str = "inf" if r["profit_factor"] == float("inf") else f"{r['profit_factor']:.2f}"
+        print(f"{r['version']:<20} {r['trades']:>7} {r['win_rate_pct']:>9.1f} {r['total_pnl_pct']:>10.2f} "
+              f"{r['total_pnl_dollars']:>10.2f} {pf_str:>13} {r['max_drawdown_dollars']:>8.2f} "
+              f"{r['max_drawdown_pct']:>8.2f}")
+
+    print()
+    for r in rows:
+        print(f"{r['version']}: {r['description']}")
+
+    print(f"\nFull ablation saved to: {ABLATION_OUTPUT_FILE}")
+    print("Note: v3 uses identical entries/exits to v2 under current wiring, not a bug -- see description above.")
+    print("v4 (buy-and-hold) computes profit factor and max drawdown from daily returns over the whole")
+    print("dataset window, not from discrete trades, since it holds one continuous position throughout;")
+    print("only its win-rate/total-PnL figures are directly comparable to v1-v3.")
+    print("Max drawdown for v1-v3 is built from a chronological-entry-order equity curve (one position")
+    print("at a time, matching live no-stacking behavior) expressed against the $1,000 per-trade notional.")
+
 def run():
     print("Downloading SPY data from 2023-01-01...")
     df = get_historical_data(TICKER)
@@ -384,6 +534,10 @@ def run():
           f"({len(MIN_VOTES_GRID)}x{len(CONFIDENCE_GRID)} combinations) across full history...")
     confidence_votes_grid_results = run_confidence_votes_grid(df)
     print_and_save_confidence_votes_grid(confidence_votes_grid_results)
+
+    print("\nRunning ablation study (technical-only, 70% floor, full system, buy-and-hold)...")
+    ablation_rows = run_ablation_study(df)
+    print_and_save_ablation(ablation_rows)
 
 if __name__ == "__main__":
     run()
