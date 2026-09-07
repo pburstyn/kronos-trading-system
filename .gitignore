@@ -1,5 +1,6 @@
 .env
 venv/
 logs/
+!logs/backtest_ablation.csv
 __pycache__/
 *.pyc

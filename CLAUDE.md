@@ -40,6 +40,8 @@
 - `logs/backtest_results.csv` — SPY backtest results (next-day directional accuracy)
 - `logs/backtest_qqq.csv` — QQQ backtest results
 - `logs/backtest_bracket_grid.csv` — GTC bracket stop-loss/take-profit grid backtest (49 combos, win rate + PnL per combo), written by scripts/backtest.py as of July 27. See Phase 3 Bracket Grid Backtest section.
+- `logs/backtest_confidence_votes_grid.csv` — MIN_VOTES x MIN_CONFIDENCE grid (15 combos), written by scripts/backtest.py as of August 30. Gitignored, regenerated per run. See Confidence-Floor / Vote-Threshold Grid section.
+- `logs/backtest_ablation.csv` — Four-version ablation study (technical-only, 70% floor, full system, buy-and-hold), written by scripts/backtest.py as of September 6. **Tracked in git** (explicit exception in .gitignore, unlike the other backtest_*.csv outputs). See Ablation Study section.
 - `logs/news_cache.json` — Daily financial headlines cache written by news_context.py, read by andy and kimi
 - `logs/intraday_price_log.csv` — SPY price sampled every 15 min during market hours (standalone, not pipeline)
 - `logs/alpaca_orders.csv` — Submitted Alpaca paper orders (order ID, direction, notional, stop/take-profit levels)
@@ -202,6 +204,21 @@
 - **Output:** `logs/backtest_bracket_grid.csv` (full 49-row grid: win rate, avg holding days, total PnL % and $ per combo), printed to console ranked by total PnL.
 - **Result:** best combo by total PnL was stop=2.0%/TP=7.0% (31.2% win rate, $2,457.97 total PnL, 24.2 avg holding days, 5/309 still open at dataset end). The current live setting (stop=2%, TP=3–5%) ranked #31 and #14 of 49 respectively ($907.97 and $1,677.97) — both historically profitable, just not the top of the grid. Historical win rate at the live 2%/3% setting was 46.1% — well above the 0/4 seen live, suggesting the live losing streak is at least partly a small-sample/regime effect (choppy month) rather than proof the setting is broken.
 - **Not yet decided:** whether to change live stop/TP settings based on this — total-PnL-optimal cells (TP 6-8%) also have the widest avg holding periods (20-40+ days) and lower win rates (~25-40%), which trades win-rate/psychological-tolerance for size of win; needs a decision on which tradeoff Peter wants before changing `trade_logic.py`'s `STOP_LOSS_PCT`/`TAKE_PROFIT_PCT_LOW`/`TAKE_PROFIT_PCT_HIGH`.
+
+## Confidence-Floor / Vote-Threshold Grid — COMPLETED (August 30)
+- **Purpose:** isolate the entry-filter question (confidence floor, indicator-vote agreement) from the exit-level question the bracket grid above already covers, using the live 2%/3% bracket (the leg `alpaca_execute.py` actually submits — `take_profit_high` is only shown in Telegram messaging, never placed).
+- **Extended `scripts/backtest.py`** with `generate_all_signals()` / `run_confidence_votes_grid()`: MIN_VOTES (2/3/4) × MIN_CONFIDENCE (50/60/70/80/90%) = 15 combinations, same historical signal set.
+- **Output:** `logs/backtest_confidence_votes_grid.csv` (gitignored, regenerated per run).
+- **Result:** best combo by total PnL was min_votes=3/min_confidence=50% (44.7% win rate, ~$1,220 total PnL). The current live setting (min_votes=3, min_confidence=70%) ranked #4 of 15 (~45% win rate, ~$850 total PnL). Raising the confidence floor above 70% did not help — 90% confidence loses money at every MIN_VOTES level tested. Requiring 4-vote agreement (stricter than today) underperformed 3-vote at every matching confidence level.
+- **Follow-on finding (same session):** `trade_logic.py`'s own `MIN_CONFIDENCE_FOR_ENTRY = 51.0` is dead code under current wiring — `signal_logger.py`'s `MIN_CONFIDENCE = 70.0` relabels anything below 70% confidence as `"WEAK"` (not `"UP"`/`"DOWN"`) before it's ever logged, and `critic.py`'s `get_latest_signal_direction()` only proceeds on `"UP"`/`"DOWN"`, so nothing between 51-69% confidence can ever reach `trade_logic.py`. Its 51% floor can never bind beneath signal_logger.py's stricter 70% gate. If the 50%-floor result above is ever acted on, the fix belongs in `signal_logger.py`'s `MIN_CONFIDENCE`, not `trade_logic.py`.
+
+## Ablation Study — COMPLETED (September 6)
+- **Purpose:** put the confidence-floor question in the confidence/votes grid above head-to-head against a "no filter at all" baseline and a passive buy-and-hold benchmark, in one directly comparable table.
+- **Extended `scripts/backtest.py`** with `compute_trade_metrics()` / `compute_buy_and_hold_metrics()` / `run_ablation_study()`: four versions on the live 2%/3% bracket — (1) technical signal only, no confidence filter, (2) technical signal + 70% confidence floor, (3) full system as currently configured, (4) buy-and-hold SPY benchmark. Reports win rate, total PnL, profit factor, and max drawdown per version.
+- **v2 and v3 are identical by construction, not a bug** — same root cause as the confidence/votes grid finding above: `trade_logic.py`'s 51% floor can never bind beneath `signal_logger.py`'s 70% gate, so "70% floor" and "full system" produce the same entries under current wiring.
+- **v4 (buy-and-hold)** computes profit factor and max drawdown from daily returns rather than discrete trades, since it holds one continuous position — only its win-rate/total-PnL figures are directly comparable to v1-v3. Max drawdown for v1-v3 is built from a chronological-entry-order equity curve (one position at a time, matching live no-stacking behavior) expressed against the $1,000 per-trade notional, not a modeled running account balance.
+- **Output:** `logs/backtest_ablation.csv` — tracked in git (explicit exception in `.gitignore`; every other `logs/backtest_*.csv` output is gitignored and regenerated per run).
+- **Result (325 historical signals as of Sep 6):** v1 (no filter) had the highest total PnL ($1,999.65, 1.32 profit factor) but also the deepest drawdown (127%). v2/v3 (live 70% floor) cut PnL to $847.04 (1.24 profit factor, 90% drawdown) for roughly the same win rate (45.2% vs 46.7%) — the floor filters out a large volume of collectively-profitable trades, not just noise. v4 (buy-and-hold) landed close to v2/v3's total return ($851.75) with far less drawdown (18.76%), suggesting the active strategy takes on much more drawdown risk for a similar headline return over this window.
 
 ## Telegram Notifications — COMPLETED (June 20)
 - **Bot:** @Peters_Open_Claw_Bot (same bot OpenClaw/Andy uses). No new bot needed.
@@ -426,11 +443,17 @@ tail -3 ~/trading-system/logs/signal_log.csv
 # Run EMA comparison
 cd ~/trading-system && python3 scripts/compare_ema_rsi.py
 
-# Run SPY backtest (next-day accuracy + GTC bracket stop/TP grid as of July 27)
+# Run SPY backtest (accuracy + bracket grid + confidence/votes grid + ablation study)
 cd ~/trading-system && python3 scripts/backtest.py
 
 # Check the bracket grid backtest results (49 stop/TP combos, ranked by total PnL)
 cat ~/trading-system/logs/backtest_bracket_grid.csv
+
+# Check the confidence-floor / vote-threshold grid (15 combos, ranked by total PnL)
+cat ~/trading-system/logs/backtest_confidence_votes_grid.csv
+
+# Check the ablation study (technical-only, 70% floor, full system, buy-and-hold)
+cat ~/trading-system/logs/backtest_ablation.csv
 
 # If Ubuntu restarted
 cd ~/trading-system && source venv/bin/activate && bash scripts/run_pipeline.sh
