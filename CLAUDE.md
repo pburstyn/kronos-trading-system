@@ -29,6 +29,7 @@
 - `scripts/andy_health.py` — **Standalone, pipeline-independent.** Checks if OpenClaw (Andy) is reachable on port 18789 via powershell.exe Test-NetConnection. Sends Telegram alert only on status change (UP→DOWN or DOWN→UP). State tracked in logs/andy_status.json. Runs every 30 min 24/7 via cron. Logs to logs/andy_health.log.
 - `scripts/morning_check.py` — **Standalone, pipeline-independent.** Runs at 7 AM PT (10 AM ET) weekdays. Checks Alpaca for open SPY position or pending orders; sends Telegram with filled price, current SPY price, unrealized P&L, and bracket leg status. Alerts if order is unfilled. Logs to logs/morning_check.log.
 - `scripts/tech_watch.py` — **Standalone, pipeline-independent.** Runs Mondays at 7:05 AM PT. Queries the HN Algolia search API (`https://hn.algolia.com/api/v1/search`) for stories from the past 7 days matching keywords (LLM, AI trading, Claude Code, MCP, alpaca trading, autonomous agents, trading bot), filters client-side for ≥10 points (the API's `numericFilters` rejects `points` as an unregistered attribute — only `created_at_i` works server-side), dedupes, takes the top 5 by points, and sends a formatted Telegram digest. Sends a "nothing notable this week" message if no story clears the bar. Logs to logs/tech_watch.log.
+- `scripts/weekly_health.py` — **Added September 6.** Standalone, pipeline-independent. Runs Mondays at 7:10 AM PT (right after tech_watch.py's 7:05 slot). Splits the last 7 days of `logs/pipeline.log` into per-day blocks (by `"— Pipeline starting"` markers, so a run that crashes before printing "Pipeline complete" is still captured on its own day), checks each weekday's block for marker text confirming signal_logger, andy_reasoning, kimi_k3_reasoning, critic, trade_logic, and alpaca_execute all ran (andy_reasoning/kimi_k3_reasoning share an identical "Reading latest signal..." first line, so their markers use the distinct completion/skip text that follows instead), and scans every line for ERROR/Traceback/SKIP. Also flags any weekday in the window with no pipeline block at all (e.g. the machine was off). Sends one Telegram summary — "all clear" if nothing found, otherwise a per-day breakdown of missing scripts and flagged lines (capped at 10 lines/day). Logs to logs/weekly_health.log.
 - `scripts/alpaca_data.py` — Real-time SPY quotes and paper trading account info via Alpaca Markets
 - `scripts/fred_data.py` — Macro data (Fed Funds Rate, CPI, unemployment) via FRED API
 - `scripts/fear_greed.py` — CNN Fear and Greed Index sentiment data
@@ -47,6 +48,7 @@
 - `logs/morning_check.log` — Morning trade check log (appended by cron at 7 AM PT weekdays)
 - `logs/outcome_tracker.log` — Standalone outcome tracker log (appended by cron at 1:05 PM PT weekdays, right after market close)
 - `logs/tech_watch.log` — Standalone tech watch log (appended by cron Mondays at 7:05 AM PT)
+- `logs/weekly_health.log` — Standalone weekly pipeline health check log (appended by cron Mondays at 7:10 AM PT)
 - `logs/hy3_reasoning_log.csv` — Hy3's per-signal reasoning log, written by hy3_reasoning.py
 - `logs/kimi_k3_reasoning_log.csv` — Kimi K3's per-signal reasoning log, written by kimi_k3_reasoning.py
 
@@ -289,6 +291,7 @@
 18. ✅ Kimi K3 replaced Hy3 as Analyst 2 in run_pipeline.sh (July 17) — deliberate upgrade, not a break-fix. Routed via OpenRouter (moonshotai/kimi-k3, paid) after the originally-specified direct Moonshot API (api.moonshot.cn) turned out to need a different Moonshot platform/account. critic.py updated to read Kimi K3's log instead of Hy3's. hy3_reasoning.py left intact for manual use. See Analyst 2 Swap: Hy3 → Kimi K3 section for detail.
 19. ⬜ Live trading with $5,000-$10,000 capital on MES (after Alpaca validation proves out)
 20. ✅ Daily position re-confirmation check added (July 27) — scripts/position_reconfirm.py flags via Telegram when today's fresh signal direction contradicts an already-open Alpaca position, wired into run_pipeline.sh after alpaca_execute.py
+21. ✅ Weekly pipeline health check built (September 6) — scripts/weekly_health.py scans the last 7 days of pipeline.log for missing script runs, errors, tracebacks, and skips; sends a Monday 7:10 AM PT Telegram summary (or "all clear")
 12. ⬜ Live trading with $5,000-$10,000 capital on MES (after Alpaca validation proves out, requires funding live Tradovate)
 13. ⬜ Scale up, add QQQ, crypto, FOREX instruments
 14. ⬜ Semi-autopilot with Claude Code + broker API executor
@@ -388,6 +391,12 @@ cd ~/trading-system && python3 scripts/tech_watch.py
 
 # View tech watch log
 tail -20 ~/trading-system/logs/tech_watch.log
+
+# Run weekly pipeline health check manually (add --dry-run to skip the Telegram send)
+cd ~/trading-system && python3 scripts/weekly_health.py
+
+# View weekly health check log
+tail -20 ~/trading-system/logs/weekly_health.log
 
 # Check Andy health manually
 cd ~/trading-system && python3 scripts/andy_health.py
