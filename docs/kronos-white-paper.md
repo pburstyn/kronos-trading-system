@@ -156,7 +156,7 @@ Phase 3 begins after the September 27 validation review, conditional on results.
 
 ## 10. Critic Self-Learning
 
-At 75 or more closed trades with recorded outcomes, the Critic becomes a candidate for domain-specific fine-tuning using methodology similar to the Bridgewater and Thinking Machines approach published in June 2026, which demonstrated 84.7% accuracy versus 78.2% for a frontier model at 13.8 times lower inference cost by fine-tuning on proprietary expert-labeled data.
+At 75 or more closed trades with recorded outcomes, the Critic becomes a candidate for domain-specific fine-tuning using methodology similar to the Bridgewater and Thinking Machines approach published in June 2026, which demonstrated 84.7% accuracy versus 78.2% for a frontier model at 13.8 times lower inference cost by fine-tuning on proprietary expert-labeled data. (Source: "Learning to Replicate Expert Judgment in Financial Tasks," Thinking Machines Lab, June 2026)
 
 Important caveats: 75 trade outcomes is a small dataset. A trade labeled win or loss is a noisy proxy for whether the Critic's reasoning was sound. Fine-tuning carries real overfitting risk at this scale. The appropriate early framework is to store immutable decision snapshots, track explicit analyst hypotheses, score forecasts probabilistically, and analyze which input patterns correlate with positive outcomes.
 
@@ -190,7 +190,7 @@ Prerequisites for Phase 6: established directional track record from Phases 4 an
 
 ## 14. Governance Principles
 
-No live capital before paper trading proves the signal. Each phase gate requires validated results before the next phase begins. One instrument at a time, each validated independently. No live MES before paper MES on TradeStation simulation. Self-learning blocked until 30 closed trades minimum, fine-tuning until 75 or more. Human checkpoint required on capital deployment above defined thresholds. Per-action approval for all high-stakes automated actions touching financial accounts or sensitive configuration.
+No live capital before paper trading proves the signal. Each phase gate requires validated results before the next phase begins. One instrument at a time, each validated independently. No live MES before paper MES is validated on a futures paper trading simulator. Self-learning blocked until 30 closed trades minimum, fine-tuning until 75 or more. Human checkpoint required on capital deployment above defined thresholds. Per-action approval for all high-stakes automated actions touching financial accounts or sensitive configuration.
 
 ---
 
