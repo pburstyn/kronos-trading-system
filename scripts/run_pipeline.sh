@@ -4,6 +4,11 @@
 cd /home/pburstyn/trading-system
 source /home/pburstyn/trading-system/venv/bin/activate
 
+if ! python3 scripts/market_day_check.py >> /home/pburstyn/trading-system/logs/pipeline.log 2>&1; then
+    echo "$(date) — Pipeline skipped (not a market day)" >> /home/pburstyn/trading-system/logs/pipeline.log
+    exit 0
+fi
+
 echo "$(date) — Pipeline starting" >> /home/pburstyn/trading-system/logs/pipeline.log
 
 python3 scripts/signal_logger.py >> /home/pburstyn/trading-system/logs/pipeline.log 2>&1
