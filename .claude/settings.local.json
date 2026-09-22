@@ -1,0 +1,64 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__claude_ai_Google_Drive__search_files",
+      "mcp__claude_ai_Google_Drive__read_file_content",
+      "Bash(git add *)",
+      "Bash(git commit *)",
+      "Bash(git push *)",
+      "mcp__claude_ai_Google_Drive__create_file",
+      "Read(//home/pburstyn/.openclaw/**)",
+      "Read(//mnt/c/Users/openc/.openclaw/**)",
+      "Bash(python3 *)",
+      "Bash(awk '{print $2}')",
+      "Bash(crontab *)",
+      "Bash(powershell.exe *)",
+      "Bash(claude *)",
+      "Bash(curl -s \"https://hn.algolia.com/api/v1/search?query=LLM&tags=story&numericFilters=points%3E%3D10\")",
+      "Bash(curl -s \"https://hn.algolia.com/api/v1/search?query=LLM&tags=story&numericFilters=created_at_i%3E1782770012\")",
+      "Bash(curl -s \"https://hn.algolia.com/api/v1/search_by_date?query=LLM&tags=story&numericFilters=points%3E%3D10\")",
+      "Bash(curl -s https://openrouter.ai/api/v1/models)",
+      "Bash(cat logs/paper_trades.csv)",
+      "Bash(cat logs/alpaca_orders.csv)",
+      "Bash(tail -30 logs/outcome_tracker.log)",
+      "Skill(claude-api)"
+    ],
+    "deny": [
+      "Bash(rm -rf *)",
+      "Bash(rm -rf)",
+      "Bash(sudo rm -rf *)",
+      "Bash(*rm -rf*)",
+      "Bash(*DROP TABLE*)",
+      "Bash(*drop table*)",
+      "Edit(.env)",
+      "Edit(**/.env)",
+      "Write(.env)",
+      "Write(**/.env)",
+      "Bash(*> .env*)",
+      "Bash(*>> .env*)",
+      "Bash(*> */.env*)",
+      "Bash(*>> */.env*)",
+      "Bash(*tee *.env*)",
+      "Bash(*sed -i* .env*)",
+      "Bash(git push --force*)",
+      "Bash(git push -f*)",
+      "Bash(git push -f)",
+      "Bash(*git push* --force*)",
+      "Bash(*git push* -f *)",
+      "Bash(*git push* -f)"
+    ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 /home/pburstyn/trading-system/scripts/log_bash_audit.py 2>/dev/null || true"
+          }
+        ]
+      }
+    ]
+  }
+}
