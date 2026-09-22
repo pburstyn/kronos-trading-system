@@ -95,6 +95,8 @@ def execute_trade(decision, client):
         print(f"  SKIPPED: Already have {reason} in {TICKER}.")
         return
 
+    print(f"  Position guard: no existing {TICKER} exposure, proceeding with order.")
+
     # decision["entry"] is last_close from the prior day's decisions_log row — by the time
     # this market order actually fills, price has moved, so stop/take-profit must be
     # recomputed off a live quote or the resulting % from actual fill drifts (e.g. 2.84%
