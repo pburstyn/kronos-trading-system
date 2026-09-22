@@ -15,6 +15,7 @@ from alpaca.trading.requests import (
     MarketOrderRequest, TakeProfitRequest, StopLossRequest, GetOrdersRequest
 )
 from alpaca.trading.enums import OrderSide, TimeInForce, OrderClass, QueryOrderStatus
+from alpaca.common.exceptions import APIError
 
 TICKER = "SPY"
 PASS_NOTIONAL = 1000.0
@@ -27,22 +28,38 @@ def get_notional(verdict):
 
 
 def check_existing_exposure(client):
-    """Returns (True, reason) if there's already an open position or pending order in TICKER."""
+    """Returns (True, reason) if there's already an open position or pending order in TICKER,
+    in either direction. Fails CLOSED: any error verifying position/order state is treated as
+    exposure present (blocks the new order) rather than silently allowing a trade through.
+
+    BUG FIXED (Sept 21): the original `except Exception: pass` in both checks below swallowed
+    ANY error (not just "no position found") and fell through to "no exposure" — so a transient
+    API hiccup on either check let a same-day submit_order() through even with a real open
+    position (an existing Sept 14 DOWN SHORT) still held. Confirmed live: alpaca_orders.csv shows
+    order be351d2e (UP LONG) submitted Sept 21 with no "SKIPPED" line ever printed, meaning both
+    checks silently ate an exception instead of finding the Sept 14 position/legs.
+    """
     try:
         client.get_open_position(TICKER)
         return True, "existing open position"
-    except Exception:
-        pass
+    except APIError as e:
+        if getattr(e, "status_code", None) != 404:
+            return True, f"could not verify position status ({e}) — failing safe"
+    except Exception as e:
+        return True, f"could not verify position status ({e}) — failing safe"
 
     try:
+        # nested=True so bracket child legs (stop-loss/take-profit) of an already-filled
+        # parent are included, not just top-level orders.
         orders = client.get_orders(GetOrdersRequest(
             status=QueryOrderStatus.OPEN,
-            symbols=[TICKER]
+            symbols=[TICKER],
+            nested=True
         ))
         if orders:
             return True, f"{len(orders)} open order(s)"
-    except Exception:
-        pass
+    except Exception as e:
+        return True, f"could not verify order status ({e}) — failing safe"
 
     return False, None
 
