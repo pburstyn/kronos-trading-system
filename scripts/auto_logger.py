@@ -7,26 +7,35 @@ from dotenv import load_dotenv
 load_dotenv(os.path.expanduser("~/trading-system/.env"))
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from trade_logic import extract_verdict
+# STOP_LOSS_PCT/TAKE_PROFIT_PCT_LOW/TAKE_PROFIT_PCT_HIGH imported rather than
+# redefined here -- this file used to carry its own separate copy of these three
+# constants (a silent duplicate discovered September 26 2026 when the live bracket
+# was widened to 2.5%/4%: this simulated paper-trade log would have kept computing
+# levels off the old 2%/3% values while the real Alpaca orders moved to the new
+# ones, the two "parallel outcome-tracking systems" this file's CLAUDE.md section
+# describes silently disagreeing). Importing from trade_logic.py means this can't
+# happen again.
+from trade_logic import (
+    extract_verdict,
+    STOP_LOSS_PCT,
+    TAKE_PROFIT_PCT_LOW,
+    TAKE_PROFIT_PCT_HIGH,
+)
 
 DECISIONS_LOG = os.path.expanduser("~/trading-system/logs/decisions_log.csv")
 PAPER_TRADES_LOG = os.path.expanduser("~/trading-system/logs/paper_trades.csv")
 SIGNAL_LOG_PATH = os.path.expanduser("~/trading-system/logs/signal_log.csv")
 
-STOP_LOSS_PCT = 0.02
-TAKE_PROFIT_LOW_PCT = 0.03
-TAKE_PROFIT_HIGH_PCT = 0.05
-
 def calculate_levels(direction, entry_price):
     entry = float(entry_price)
     if direction == "UP":
         stop_loss = round(entry * (1 - STOP_LOSS_PCT), 2)
-        take_profit_low = round(entry * (1 + TAKE_PROFIT_LOW_PCT), 2)
-        take_profit_high = round(entry * (1 + TAKE_PROFIT_HIGH_PCT), 2)
+        take_profit_low = round(entry * (1 + TAKE_PROFIT_PCT_LOW), 2)
+        take_profit_high = round(entry * (1 + TAKE_PROFIT_PCT_HIGH), 2)
     else:
         stop_loss = round(entry * (1 + STOP_LOSS_PCT), 2)
-        take_profit_low = round(entry * (1 - TAKE_PROFIT_LOW_PCT), 2)
-        take_profit_high = round(entry * (1 - TAKE_PROFIT_HIGH_PCT), 2)
+        take_profit_low = round(entry * (1 - TAKE_PROFIT_PCT_LOW), 2)
+        take_profit_high = round(entry * (1 - TAKE_PROFIT_PCT_HIGH), 2)
     return stop_loss, take_profit_low, take_profit_high
 
 def get_latest_decision():

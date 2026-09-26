@@ -19,15 +19,19 @@ STOP_LOSS_GRID = [1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0]
 TAKE_PROFIT_GRID = [2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0]
 BRACKET_NOTIONAL = 1000  # matches live PASS-verdict sizing, for dollar PnL reporting
 
-# Confidence-floor / vote-threshold grid: reuses the live stop/TP (2%/3%) rather
-# than crossing all three axes, since alpaca_execute.py always submits the 3%
+# Confidence-floor / vote-threshold grid: reuses the live stop/TP rather than
+# crossing all three axes, since alpaca_execute.py always submits the
 # take_profit_low leg as the actual order (take_profit_high is only shown in
 # Telegram messaging, never placed) -- this isolates the entry-filter question
 # from the exit-level question already covered by the grid above.
 CONFIDENCE_GRID = [50.0, 60.0, 70.0, 80.0, 90.0]
 MIN_VOTES_GRID = [2, 3, 4]
-LIVE_STOP_PCT = 2.0
-LIVE_TP_PCT = 3.0
+# Widened from 2.0%/3.0% to 2.5%/4.0% on September 26 2026 (Julius AI-approved --
+# see CLAUDE.md Bracket Stop/Take-Profit Widened section). Must stay equal to
+# trade_logic.py's STOP_LOSS_PCT/TAKE_PROFIT_PCT_LOW or every "current live
+# setting" comparison this file prints silently goes stale.
+LIVE_STOP_PCT = 2.5
+LIVE_TP_PCT = 4.0
 CONFIDENCE_VOTES_GRID_OUTPUT_FILE = os.path.expanduser("~/trading-system/logs/backtest_confidence_votes_grid.csv")
 
 ABLATION_OUTPUT_FILE = os.path.expanduser("~/trading-system/logs/backtest_ablation.csv")
@@ -244,11 +248,13 @@ def print_and_save_grid(grid_results):
           f"-> {best['win_rate_pct']}% win rate, ${best['total_pnl_dollars']:.2f} total PnL "
           f"over {best['trades']} trades ({best['still_open']} still open at end of data)")
 
-    live_rows = [r for r in grid_results if r["stop_loss_pct"] == 2.0 and r["take_profit_pct"] in (3.0, 5.0)]
+    # Uses LIVE_STOP_PCT/LIVE_TP_PCT (not hardcoded literals) so this stays correct
+    # whenever trade_logic.py's bracket changes -- see LIVE_STOP_PCT's own comment.
+    live_rows = [r for r in grid_results if r["stop_loss_pct"] == LIVE_STOP_PCT and r["take_profit_pct"] in (LIVE_TP_PCT, 5.0)]
     for live in sorted(live_rows, key=lambda r: r["take_profit_pct"]):
         rank = ranked.index(live) + 1
-        print(f"\nCurrent live setting (stop=2%, TP={live['take_profit_pct']:.0f}%, the low/high end of "
-              f"trade_logic.py's 3-5% range): rank #{rank} of {len(ranked)} by total PnL "
+        print(f"\nCurrent live setting (stop={LIVE_STOP_PCT:g}%, TP={live['take_profit_pct']:.0f}%, the low/high end of "
+              f"trade_logic.py's {LIVE_TP_PCT:.0f}-5% range): rank #{rank} of {len(ranked)} by total PnL "
               f"-> {live['win_rate_pct']}% win rate, ${live['total_pnl_dollars']:.2f} total PnL")
 
     print(f"\nFull grid saved to: {BRACKET_GRID_OUTPUT_FILE}")
@@ -317,7 +323,7 @@ def print_and_save_confidence_votes_grid(grid_results):
               f"{live['trades']} trades")
 
     print(f"\nFull grid saved to: {CONFIDENCE_VOTES_GRID_OUTPUT_FILE}")
-    print("Note: entry filters only (stop/TP fixed at the live 2%/3% bracket) -- isolates whether raising the")
+    print(f"Note: entry filters only (stop/TP fixed at the live {LIVE_STOP_PCT:g}%/{LIVE_TP_PCT:g}% bracket) -- isolates whether raising the")
     print("confidence floor or requiring more indicator agreement would have improved historical results,")
     print("independent of the exit-level question already covered by the stop/TP grid above.")
 

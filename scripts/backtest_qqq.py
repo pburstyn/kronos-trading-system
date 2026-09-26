@@ -66,11 +66,11 @@ def print_and_save_grid(grid_results):
           f"-> {best['win_rate_pct']}% win rate, ${best['total_pnl_dollars']:.2f} total PnL "
           f"over {best['trades']} trades ({best['still_open']} still open at end of data)")
 
-    live_rows = [r for r in grid_results if r["stop_loss_pct"] == bt.LIVE_STOP_PCT and r["take_profit_pct"] in (3.0, 5.0)]
+    live_rows = [r for r in grid_results if r["stop_loss_pct"] == bt.LIVE_STOP_PCT and r["take_profit_pct"] in (bt.LIVE_TP_PCT, 5.0)]
     for live in sorted(live_rows, key=lambda r: r["take_profit_pct"]):
         rank = ranked.index(live) + 1
-        print(f"\nCurrent live SPY bracket setting applied to {TICKER} (stop=2%, TP={live['take_profit_pct']:.0f}%, "
-              f"the low/high end of trade_logic.py's 3-5% range): rank #{rank} of {len(ranked)} by total PnL "
+        print(f"\nCurrent live SPY bracket setting applied to {TICKER} (stop={bt.LIVE_STOP_PCT:g}%, TP={live['take_profit_pct']:.0f}%, "
+              f"the low/high end of trade_logic.py's {bt.LIVE_TP_PCT:.0f}-5% range): rank #{rank} of {len(ranked)} by total PnL "
               f"-> {live['win_rate_pct']}% win rate, ${live['total_pnl_dollars']:.2f} total PnL")
 
     print(f"\nFull {TICKER} grid saved to: {OUTPUT_FILE}")

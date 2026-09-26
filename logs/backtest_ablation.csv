@@ -1,5 +1,5 @@
 version,description,trades,resolved,win_rate_pct,total_pnl_pct,total_pnl_dollars,profit_factor,max_drawdown_dollars,max_drawdown_pct
-v1_technical_only,"Technical signal only, no confidence filter",617,607,44.8,152.22,1522.21,1.23,1655.11,165.51
-v2_confidence_70,Technical signal + 70% confidence floor,337,329,43.2,56.39,563.95,1.15,1137.94,113.79
-v3_full_system,Full system as currently configured (identical entries to v2 -- trade_logic.py's 51% floor never binds beneath signal_logger.py's 70% gate),337,329,43.2,56.39,563.95,1.15,1137.94,113.79
+v1_technical_only,"Technical signal only, no confidence filter",617,597,47.1,344.16,3441.63,1.43,1860.0,186.0
+v2_confidence_70,Technical signal + 70% confidence floor,337,323,43.0,101.07,1010.68,1.22,1411.21,141.12
+v3_full_system,Full system as currently configured (identical entries to v2 -- trade_logic.py's 51% floor never binds beneath signal_logger.py's 70% gate),337,323,43.0,101.07,1010.68,1.22,1411.21,141.12
 v4_buy_and_hold,"Buy-and-hold SPY benchmark (daily-return based, not trade-based)",1,1,100.0,85.91,859.14,1.31,271.74,18.76

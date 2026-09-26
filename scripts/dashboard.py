@@ -1,6 +1,15 @@
 import csv
 import os
+import sys
 from datetime import datetime
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+# Imported rather than hardcoded -- this file used to carry its own third
+# independent copy of the stop-loss/take-profit percentages (0.98/1.03 literals
+# below), discovered September 26 2026 alongside an identical duplicate in
+# auto_logger.py when the live bracket moved to 2.5%/4%. Importing means the
+# dashboard's trade calculator can't silently show stale percentages again.
+from trade_logic import STOP_LOSS_PCT, TAKE_PROFIT_PCT_LOW
 
 DECISIONS_LOG = os.path.expanduser(
     "~/trading-system/logs/decisions_log.csv"
@@ -38,8 +47,10 @@ def trade_calculator(rows):
         return ""
     if price == 0:
         return ""
-    stop_loss = round(price * 0.98, 2)
-    take_profit = round(price * 1.03, 2)
+    stop_loss = round(price * (1 - STOP_LOSS_PCT), 2)
+    take_profit = round(price * (1 + TAKE_PROFIT_PCT_LOW), 2)
+    stop_pct_label = f"{STOP_LOSS_PCT * 100:g}%"
+    take_profit_pct_label = f"{TAKE_PROFIT_PCT_LOW * 100:g}%"
     shares = int(1000 / price) or 1
     direction = latest.get("direction", "")
     if verdict == "PASS":
@@ -69,9 +80,9 @@ def trade_calculator(rows):
         f'<tr><td style="padding:6px 10px;font-weight:bold;">Shares (approx $1,000)</td>'
         f'<td style="padding:6px 10px;">{shares} shares</td></tr>'
         f'<tr style="background:rgba(0,0,0,0.03);">'
-        f'<td style="padding:6px 10px;font-weight:bold;">Stop Loss (2% below)</td>'
+        f'<td style="padding:6px 10px;font-weight:bold;">Stop Loss ({stop_pct_label} below)</td>'
         f'<td style="padding:6px 10px;color:#a61a1a;font-weight:bold;">${stop_loss}</td></tr>'
-        f'<tr><td style="padding:6px 10px;font-weight:bold;">Take Profit (3% above)</td>'
+        f'<tr><td style="padding:6px 10px;font-weight:bold;">Take Profit ({take_profit_pct_label} above)</td>'
         f'<td style="padding:6px 10px;color:#1a7a1a;font-weight:bold;">${take_profit}</td></tr>'
         f'</table>'
         f'<p style="margin:12px 0 0 0;font-size:0.85em;color:{note_color};">{note}</p>'
