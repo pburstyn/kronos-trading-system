@@ -15,6 +15,7 @@ from trade_logic import get_latest_decision_row, make_trade_decision, extract_ve
 
 OPENCLAW_CONFIG = "/mnt/c/Users/openc/.openclaw/openclaw.json"
 SIGNAL_LOG = os.path.expanduser("~/trading-system/logs/signal_log.csv")
+QQQ_SIGNAL_LOG = os.path.expanduser("~/trading-system/logs/signal_log_qqq.csv")
 
 
 def get_telegram_config():
@@ -51,10 +52,10 @@ def send_telegram(token, chat_id, text):
     return resp.json()
 
 
-def get_latest_signal_row():
-    if not os.path.isfile(SIGNAL_LOG):
+def get_latest_signal_row(path=SIGNAL_LOG):
+    if not os.path.isfile(path):
         return None
-    with open(SIGNAL_LOG, "r") as f:
+    with open(path, "r") as f:
         rows = list(csv.DictReader(f))
     if not rows:
         return None
@@ -143,7 +144,7 @@ def send_entry_alert(dry_run):
 
 
 def send_daily_summary(dry_run):
-    row = get_latest_signal_row()
+    row = get_latest_signal_row(SIGNAL_LOG)
     if not row:
         print("  No signal row found — skipping daily summary.")
         return
@@ -158,10 +159,33 @@ def send_daily_summary(dry_run):
     send_message(message, dry_run, "Daily summary")
 
 
+def send_qqq_daily_summary(dry_run):
+    """QQQ equivalent of send_daily_summary() -- same format (build_daily_summary_message()
+    already reads the ticker off the row, so no QQQ-specific message builder is needed),
+    same staleness check, separate log file and separate Telegram message. QQQ is
+    signal-capture-only (see CLAUDE.md QQQ Second Instrument section): there is no QQQ
+    decisions_log or trade_logic, so there is no QQQ equivalent of send_entry_alert() --
+    this is a passive daily FYI only."""
+    row = get_latest_signal_row(QQQ_SIGNAL_LOG)
+    if not row:
+        print("  No QQQ signal row found — skipping QQQ daily summary.")
+        return
+
+    row_date = row["timestamp"].split(" ")[0]
+    today_date = datetime.now().strftime("%Y-%m-%d")
+    if row_date != today_date:
+        print(f"  SKIP QQQ daily summary: stale signal ({row_date}), not today.")
+        return
+
+    message = build_daily_summary_message(row)
+    send_message(message, dry_run, "QQQ daily summary")
+
+
 def run(dry_run=False):
     print("\n-- Telegram Notify --")
     send_entry_alert(dry_run)
     send_daily_summary(dry_run)
+    send_qqq_daily_summary(dry_run)
     print("---------------------\n")
 
 
