@@ -12,6 +12,12 @@ fi
 echo "$(date) — Pipeline starting" >> /home/pburstyn/trading-system/logs/pipeline.log
 
 python3 scripts/signal_logger.py >> /home/pburstyn/trading-system/logs/pipeline.log 2>&1
+
+# QQQ is a second instrument for signal capture only -- data collection to build
+# a QQQ history, mirroring the SPY signal (same MIN_VOTES/MIN_CONFIDENCE logic,
+# separate log file). No downstream QQQ analyst reasoning, critic, trade_logic,
+# or alpaca_execute exists yet -- QQQ signals are not acted on.
+python3 scripts/signal_logger_qqq.py >> /home/pburstyn/trading-system/logs/pipeline.log 2>&1
 python3 scripts/news_context.py >> /home/pburstyn/trading-system/logs/pipeline.log 2>&1
 python3 scripts/andy_reasoning.py >> /home/pburstyn/trading-system/logs/pipeline.log 2>&1
 python3 scripts/kimi_k3_reasoning.py >> /home/pburstyn/trading-system/logs/pipeline.log 2>&1

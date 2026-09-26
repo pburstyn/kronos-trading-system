@@ -10,12 +10,14 @@
 
 ## File Structure
 - `scripts/signal_logger.py` — Fetches SPY data, computes indicators, logs signal
+- `scripts/signal_logger_qqq.py` — **Added September 26.** Identical to signal_logger.py except TICKER="QQQ" and its own log file (logs/signal_log_qqq.csv). Signal capture only, wired into run_pipeline.sh alongside signal_logger.py — no downstream QQQ analyst reasoning, critic, trade_logic, or alpaca_execute exists yet, so QQQ signals are logged but never acted on. See QQQ Second Instrument section.
 - `scripts/andy_reasoning.py` — Claude Haiku reasons about the signal
 - `scripts/critic.py` — Issues PASS/FLAG/VETO verdict
 - `scripts/dashboard.py` — Generates dashboard.html
 - `scripts/auto_logger.py` — Logs paper trades
 - `scripts/run_pipeline.sh` — Master pipeline script
 - `scripts/backtest.py` — Historical backtest script
+- `scripts/backtest_qqq.py` — **Added September 26.** Runs the same GTC bracket stop/take-profit grid as backtest.py but against QQQ history. Imports backtest.py as a module and reuses its get_historical_data()/compute_indicators()/generate_signal()/run_bracket_grid() directly rather than re-copying the vote logic, so it always tracks whatever MIN_VOTES/MIN_CONFIDENCE/grid backtest.py is set to. Only defines its own TICKER and output path. Writes logs/backtest_qqq_bracket_grid.csv.
 - `scripts/compare_ema_rsi.py` — EMA crossover vs Kronos comparison script
 - `scripts/kimi_reasoning.py` — Kimi K2 (via NVIDIA NIM) reasons about the signal. **No longer called from run_pipeline.sh as of July 9** (see Analyst 2 Swap section) — left intact for manual use in case NVIDIA access is restored.
 - `scripts/hy3_reasoning.py` — Hy3 (via OpenRouter, model `tencent/hy3:free`) reasons about the signal. **No longer called from run_pipeline.sh as of July 17** (see Analyst 2 Swap: Hy3 → Kimi K3 section) — left intact for manual use. Free tier until July 21 2026. Mirrors kimi_reasoning.py's structure (macro/sentiment/news context, same prompt shape). Logs to logs/hy3_reasoning_log.csv.
@@ -33,13 +35,15 @@
 - `scripts/alpaca_data.py` — Real-time SPY quotes and paper trading account info via Alpaca Markets
 - `scripts/fred_data.py` — Macro data (Fed Funds Rate, CPI, unemployment) via FRED API
 - `scripts/fear_greed.py` — CNN Fear and Greed Index sentiment data
-- `logs/signal_log.csv` — Live signal log
+- `logs/signal_log.csv` — Live signal log (SPY)
+- `logs/signal_log_qqq.csv` — **Added September 26.** Live signal log (QQQ), written by scripts/signal_logger_qqq.py. Deliberately a separate file, not a shared one with signal_log.csv — critic.py, trade_logic.py, and others all key off "the last row" of signal_log.csv assuming it's SPY's latest signal; interleaving QQQ rows into that same file would have silently fed QQQ signals into the SPY trading pipeline.
 - `logs/decisions_log.csv` — Andy + Critic decisions
 - `logs/pipeline.log` — Pipeline run log
 - `logs/dashboard.html` — Visual dashboard
 - `logs/backtest_results.csv` — SPY backtest results (next-day directional accuracy)
 - `logs/backtest_qqq.csv` — QQQ backtest results
 - `logs/backtest_bracket_grid.csv` — GTC bracket stop-loss/take-profit grid backtest (49 combos, win rate + PnL per combo), written by scripts/backtest.py as of July 27. See Phase 3 Bracket Grid Backtest section.
+- `logs/backtest_qqq_bracket_grid.csv` — **Added September 26.** Same 49-combo GTC bracket grid as backtest_bracket_grid.csv, run against QQQ instead of SPY, written by scripts/backtest_qqq.py. See QQQ Second Instrument section.
 - `logs/backtest_confidence_votes_grid.csv` — MIN_VOTES x MIN_CONFIDENCE grid (15 combos), written by scripts/backtest.py as of August 30. Gitignored, regenerated per run. See Confidence-Floor / Vote-Threshold Grid section.
 - `logs/backtest_ablation.csv` — Four-version ablation study (technical-only, 70% floor, full system, buy-and-hold), written by scripts/backtest.py as of September 6. **Tracked in git** (explicit exception in .gitignore, unlike the other backtest_*.csv outputs). See Ablation Study section.
 - `logs/news_cache.json` — Daily financial headlines cache written by news_context.py, read by andy and kimi
@@ -253,6 +257,15 @@
 - **Honest read of the tradeoff:** total PnL improves ($563.95 -> $762.21) but every risk-adjusted measure gets worse — profit factor 1.15 -> 1.12, max drawdown $1,138 -> $1,865 (+64%), profit-per-trade $1.67 -> $1.41, and trade count jumps 337 -> 540 (+60%). Buy-and-hold still beats the active strategy on both total return ($859.14) and drawdown ($271.73) over this window. This change buys more gross dollars by taking materially more risk and placing 60% more trades; it does not fix the underlying edge problem.
 - **Live paper record remains 0 wins / 5 losses** — this change widens the funnel, it does not address why the five trades that did fire all stopped out.
 
+## QQQ Second Instrument — Signal Capture Added (September 26)
+- **Scope, exactly as requested:** `scripts/signal_logger_qqq.py` (a copy of `signal_logger.py` with `TICKER="QQQ"` and its own log file, `logs/signal_log_qqq.csv`), wired into `run_pipeline.sh` immediately after `signal_logger.py`, plus a one-off `scripts/backtest_qqq.py` GTC bracket grid run against QQQ history. **Not built:** any QQQ-specific analyst reasoning, critic, trade_logic, or alpaca_execute. QQQ signals are captured on every pipeline run and go nowhere else — no Telegram alert, no paper order, no dashboard entry. This is data collection for a future QQQ pipeline, not a second live strategy.
+- **Why a separate log file was mandatory, not a style choice:** `signal_logger.py`'s own `signal_log.csv` header already carries a `ticker` column, so both instruments could in principle share one file. But `critic.py`'s `get_latest_signal_direction()`, and other downstream readers, all take "the last row" of that file as SPY's latest signal with no ticker check. Appending QQQ's row to the same file after SPY's would make QQQ's signal the one `critic.py`/`trade_logic.py` act on for the rest of that pipeline run — a silent cross-instrument corruption, not a cosmetic issue. `signal_logger_qqq.py` writes to `logs/signal_log_qqq.csv` instead; nothing in the existing SPY pipeline reads that file.
+- **`scripts/backtest_qqq.py` imports `backtest.py` as a module** rather than re-copying `generate_signal()`/`compute_indicators()`/the grid loop a third time. It only defines its own `TICKER` and `OUTPUT_FILE`; `MIN_VOTES`, `MIN_CONFIDENCE`, and the stop-loss/take-profit grids are read live off `backtest.py`, so this file cannot drift out of sync the way the three separate `MIN_CONFIDENCE` constants did earlier today (see the Confidence Floor sections above) — there was no reason to introduce a fourth copy of that same constant.
+- **QQQ bracket grid results (346 signals fired, min_votes=3, min_confidence=70%, 2023-01-01 to 2026-09-26), written to `logs/backtest_qqq_bracket_grid.csv`:** best combo by total PnL was stop=2.5%/TP=4.0% (48.0% win rate, $2,147.59 total PnL, 4/346 still open). The current live SPY bracket settings, applied to QQQ history: stop=2%/TP=3% ranked #41 of 49 (44.6% win rate, $794.57); stop=2%/TP=5% ranked #33 of 49 (32.8% win rate, $1,097.14).
+- **Side-by-side with SPY's own grid (`logs/backtest_bracket_grid.csv`, same live 2%/3% cell, same day):** QQQ fired more signals over the same window (346 vs. 337) and the live-setting cell shows a higher win rate (44.6% vs. 43.2%) and higher total PnL ($794.57 vs. $563.95) on QQQ than on SPY. This is a single historical grid, not a live-trading result — no QQQ paper trades exist to compare it against, unlike SPY's 0-win/5-loss paper record.
+- **`weekly_health.py` does not monitor `signal_logger_qqq.py`** — its marker-matching dict only checks for SPY's "Fetching data for SPY..." text under the `signal_logger` key, so a QQQ-specific failure (bad ticker, yfinance error, etc.) would not trigger a Monday alert. Same blind spot as the other standalone/secondary scripts (`intraday_logger.py`, `tech_watch.py`, `andy_health.py`) that `weekly_health.py` also doesn't check. Not fixed as part of this change — flagging it since a new script was added to the pipeline it doesn't watch.
+- **Tested live (September 26):** ran `signal_logger_qqq.py` standalone — correctly fetched QQQ data, computed indicators, printed a NEUTRAL verdict (bull_votes=2, bear_votes=0, MIN_VOTES=3 not met), and wrote to `logs/signal_log_qqq.csv` without touching `logs/signal_log.csv`. Ran `run_pipeline.sh`'s new wiring by inspection (added directly after the existing `signal_logger.py` line, same log-redirect pattern as every other pipeline step).
+
 ## Telegram Notifications — COMPLETED (June 20)
 - **Bot:** @Peters_Open_Claw_Bot (same bot OpenClaw/Andy uses). No new bot needed.
 - **Script:** `scripts/telegram_notify.py` — reads botToken from `/mnt/c/Users/openc/.openclaw/openclaw.json` (channels.telegram.botToken), reads Peter's personal chat ID from `.env` (TELEGRAM_CHAT_ID = 8344685831).
@@ -342,8 +355,9 @@
 19. ⬜ Live trading with $5,000-$10,000 capital on MES (after Alpaca validation proves out)
 20. ✅ Daily position re-confirmation check added (July 27) — scripts/position_reconfirm.py flags via Telegram when today's fresh signal direction contradicts an already-open Alpaca position, wired into run_pipeline.sh after alpaca_execute.py
 21. ✅ Weekly pipeline health check built (September 6) — scripts/weekly_health.py scans the last 7 days of pipeline.log for missing script runs, errors, tracebacks, and skips; sends a Monday 7:10 AM PT Telegram summary (or "all clear")
+22. ✅ QQQ added as a second instrument, signal-capture only (September 26) — scripts/signal_logger_qqq.py wired into run_pipeline.sh alongside SPY; no QQQ analyst reasoning, critic, trade_logic, or execution yet. See QQQ Second Instrument section.
 12. ⬜ Live trading with $5,000-$10,000 capital on MES (after Alpaca validation proves out, requires funding live Tradovate)
-13. ⬜ Scale up, add QQQ, crypto, FOREX instruments
+13. ⬜ Scale up QQQ to a full trading pipeline (analyst reasoning, critic, trade_logic, execution) — currently signal capture only; add crypto, FOREX instruments
 14. ⬜ Semi-autopilot with Claude Code + broker API executor
 
 ## Session Log — June 19, 2026 (First Claude Code Session)
@@ -406,8 +420,14 @@
 # Run pipeline manually
 cd ~/trading-system && bash scripts/run_pipeline.sh
 
-# Run signal logger only
+# Run signal logger only (SPY)
 cd ~/trading-system && python3 scripts/signal_logger.py
+
+# Run signal logger only (QQQ, signal capture only -- not acted on downstream, added September 26)
+cd ~/trading-system && python3 scripts/signal_logger_qqq.py
+
+# Check last QQQ signal
+tail -3 ~/trading-system/logs/signal_log_qqq.csv
 
 # Run Kimi K3 reasoning only (Analyst 2, as of July 17)
 cd ~/trading-system && python3 scripts/kimi_k3_reasoning.py
@@ -481,6 +501,12 @@ cd ~/trading-system && python3 scripts/backtest.py
 
 # Check the bracket grid backtest results (49 stop/TP combos, ranked by total PnL)
 cat ~/trading-system/logs/backtest_bracket_grid.csv
+
+# Run QQQ bracket grid backtest (49 stop/TP combos against QQQ history, added September 26)
+cd ~/trading-system && python3 scripts/backtest_qqq.py
+
+# Check the QQQ bracket grid backtest results
+cat ~/trading-system/logs/backtest_qqq_bracket_grid.csv
 
 # Check the confidence-floor / vote-threshold grid (15 combos, ranked by total PnL)
 cat ~/trading-system/logs/backtest_confidence_votes_grid.csv
