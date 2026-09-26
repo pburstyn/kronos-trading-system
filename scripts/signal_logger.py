@@ -9,7 +9,7 @@ from datetime import datetime
 TICKER = "SPY"
 LOOKBACK = 250
 MIN_VOTES = 3
-MIN_CONFIDENCE = 50.0
+MIN_CONFIDENCE = 70.0
 LOG_FILE = os.path.expanduser("~/trading-system/logs/signal_log.csv")
 
 def get_market_data(ticker, lookback):

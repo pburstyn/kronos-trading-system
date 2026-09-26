@@ -58,7 +58,7 @@
 - **Ticker:** SPY
 - **Lookback:** 250 days
 - **MIN_VOTES:** 3
-- **MIN_CONFIDENCE:** 50.0 (lowered from 70.0 on September 26 2026 — see Confidence Floor Lowered to 50% section)
+- **MIN_CONFIDENCE:** 70.0 (briefly lowered to 50.0 on September 26 2026, reverted same day after Julius AI review — see Confidence Floor: Lowered to 50%, Reverted to 70% section)
 - **Indicators:** RSI(14), MACD(12,26,9), MA50, MA200, Volume MA20
 - **MA structure:** Casts bull/bear vote (fixed May 16 2026)
 
@@ -141,9 +141,9 @@
 - **andy_reasoning.py (Analyst 1) left on Haiku** — this swap was scoped to the Critic only.
 
 ## Entry/Exit Logic — COMPLETED (scripts/trade_logic.py)
-- Long entry: MACD above signal + RSI < 70 + histogram positive + confidence >= 50%
+- Long entry: MACD above signal + RSI < 70 + histogram positive + confidence > 51%
 - Short entry: Daily close below key support with MACD bearish + RSI bearish
-- Hard confidence floor: 50% minimum for any directional entry (checked independently of verdict). **Lowered from 51% to 50% on September 26 2026 and must stay equal to signal_logger.py's MIN_CONFIDENCE** — at 51% it silently drops the entire confidence==50 bucket, which is exactly the bucket that makes the 50% floor worth having.
+- Hard confidence floor: 51% minimum for any directional entry (checked independently of verdict). Dead code under current wiring — see Confidence Floor: Lowered to 50%, Reverted to 70% section (briefly not dead code September 26 2026 while the floor was at 50%).
 - Position sizing: VETO blocks entirely, FLAG = 0.5x size, PASS = 1x size
 - Stop-loss: 2% from entry (above for shorts, below for longs)
 - Take-profit: 3-5% from entry
@@ -228,7 +228,12 @@
 - **Output:** `logs/backtest_ablation.csv` — tracked in git (explicit exception in `.gitignore`; every other `logs/backtest_*.csv` output is gitignored and regenerated per run).
 - **Result (325 historical signals as of Sep 6):** v1 (no filter) had the highest total PnL ($1,999.65, 1.32 profit factor) but also the deepest drawdown (127%). v2/v3 (live 70% floor) cut PnL to $847.04 (1.24 profit factor, 90% drawdown) for roughly the same win rate (45.2% vs 46.7%) — the floor filters out a large volume of collectively-profitable trades, not just noise. v4 (buy-and-hold) landed close to v2/v3's total return ($851.75) with far less drawdown (18.76%), suggesting the active strategy takes on much more drawdown risk for a similar headline return over this window.
 
-## Confidence Floor Lowered to 50% — COMPLETED (September 26)
+## Confidence Floor: Lowered to 50%, Reverted to 70% — COMPLETED (September 26)
+- **Reverted same day.** The 50%/50% change below was tested against Julius AI peer review and rejected on risk-adjusted grounds — total PnL was higher ($762.21 vs $563.95) but profit factor fell (1.12 vs 1.15), max drawdown rose 64% ($1,865 vs $1,138), profit-per-trade fell ($1.41 vs $1.67), and trade count rose 60% (540 vs 337). `signal_logger.py` `MIN_CONFIDENCE`, `trade_logic.py` `MIN_CONFIDENCE_FOR_ENTRY`, and `backtest.py` `MIN_CONFIDENCE` are all back to their original values (70.0, 51.0, 70.0 respectively) — note trade_logic.py's floor reverts to 51.0, not 70.0, since that was always a distinct constant that never actually bound (see below).
+- **Re-ran `backtest.py` post-revert to confirm the tracked `logs/backtest_ablation.csv` matches:** 337 trades, 43.2% win rate, $563.95 total PnL, PF 1.15, max DD $1,137.94 — identical to the reverted code's own same-day baseline measured before the 50% experiment.
+- **The underlying arithmetic finding still stands and is worth keeping in mind if this is revisited:** confidence is always a multiple of 10, nothing falls between 51 and 59, so a literal 51% floor is arithmetically identical to 60% and measurably the worst of the values tested (50/51/70). If the floor is ever lowered again, `trade_logic.py`'s `MIN_CONFIDENCE_FOR_ENTRY` must be moved to the same value as `signal_logger.py`'s `MIN_CONFIDENCE` in the same change, or it will silently start binding and reject the very signals the change was meant to admit. The full distribution and floor-by-floor comparison table is preserved below in the original (superseded) section for reference.
+
+## Confidence Floor Lowered to 50% (SUPERSEDED — reverted same day, see section above) — September 26
 - **Change:** `signal_logger.py` `MIN_CONFIDENCE` 70.0 -> 50.0, `trade_logic.py` `MIN_CONFIDENCE_FOR_ENTRY` 51.0 -> 50.0, `backtest.py` `MIN_CONFIDENCE` 70.0 -> 50.0. All three now sit at 50.0 and **must be kept in sync**.
 - **Original request was 51.0** (to match `trade_logic.py`'s then-stated floor). Measurement showed 51 is the single worst value available, so it was not used. See below.
 - **Confidence is always a multiple of 10.** `base` is 40 or 60; every adjustment is +/-10 or +/-20; the result is clamped to 99. Measured distribution over 617 directional signals (min_votes=3, 2023-01-01 to 2026-09-26): conf 30:9, 40:68, **50:81**, 60:122, 70:123, 80:127, 90:62, 99:25. Nothing whatsoever lands between 51 and 59.
@@ -251,7 +256,7 @@
 ## Telegram Notifications — COMPLETED (June 20)
 - **Bot:** @Peters_Open_Claw_Bot (same bot OpenClaw/Andy uses). No new bot needed.
 - **Script:** `scripts/telegram_notify.py` — reads botToken from `/mnt/c/Users/openc/.openclaw/openclaw.json` (channels.telegram.botToken), reads Peter's personal chat ID from `.env` (TELEGRAM_CHAT_ID = 8344685831).
-- **Trigger:** ENTER decisions only (UP or DOWN with PASS or FLAG verdict, confidence >= 50%, today's date). Exits silently on NEUTRAL, VETO, or stale signal — never spams.
+- **Trigger:** ENTER decisions only (UP or DOWN with PASS or FLAG verdict, confidence ≥ 51%, today's date). Exits silently on NEUTRAL, VETO, or stale signal — never spams.
 - **Message includes:** direction, confidence, entry price, stop-loss, take-profit range, verdict, notional size ($1,000 PASS / $500 FLAG).
 - **Pipeline position:** after alpaca_execute.py (order is placed before notification fires): `trade_logic → alpaca_execute → telegram_notify → dashboard`
 - **Why chat ID is in .env, not openclaw.json:** openclaw.json's allowFrom field contained a stale group chat ID. Peter's personal Telegram user ID was obtained via @userinfobot and stored in .env so Kronos notifications are independent of OpenClaw's config.
