@@ -15,9 +15,12 @@ LOOKBACK_DAYS = 7
 # Marker strings unique enough to tell whether a given script ran in a day's
 # pipeline.log block. andy_reasoning.py and kimi_k3_reasoning.py both print an
 # identical "Reading latest signal..." first line, so each script's markers
-# use the distinctive text that follows instead.
+# use the distinctive text that follows instead. signal_logger_qqq.py's own
+# first line already differs from signal_logger.py's ("...QQQ..." vs.
+# "...SPY..."), so no disambiguation trick is needed there.
 EXPECTED_SCRIPTS = {
     "signal_logger": ["Fetching data for SPY..."],
+    "signal_logger_qqq": ["Fetching data for QQQ..."],
     "andy_reasoning": ["Skipping Andy analysis.", "Asking Andy for reasoning", "Andy's Reasoning"],
     "kimi_k3_reasoning": ["Skipping Kimi K3 analysis.", "Asking Kimi K3 for reasoning", "Kimi K3's Reasoning"],
     "critic": ["Skipping Critic.", "Reading latest reasoning from Andy", "Critic Verdict"],
@@ -103,12 +106,15 @@ def check_day(block):
 def build_message(findings, missing_days):
     now = datetime.now().strftime("%Y-%m-%d")
     if not findings and not missing_days:
+        # Built from EXPECTED_SCRIPTS.keys() rather than a hand-maintained list so
+        # adding a new checked script (e.g. signal_logger_qqq) can't leave this
+        # message silently stale, the way the SPY-only script list did before.
+        script_list = ", ".join(EXPECTED_SCRIPTS.keys())
         return (
             f"Kronos Weekly Health Check — {now}\n\n"
             f"All clear. Every weekday pipeline run in the last {LOOKBACK_DAYS} days completed "
             f"with no errors, tracebacks, or skips, and all expected scripts "
-            f"(signal_logger, andy_reasoning, kimi_k3_reasoning, critic, trade_logic, "
-            f"alpaca_execute) ran."
+            f"({script_list}) ran."
         )
 
     lines = [f"Kronos Weekly Health Check — {now}", ""]
