@@ -7,7 +7,7 @@ import os
 from datetime import datetime
 TICKER = "SPY"
 MIN_VOTES = 3
-MIN_CONFIDENCE = 70.0
+MIN_CONFIDENCE = 50.0
 OUTPUT_FILE = os.path.expanduser("~/trading-system/logs/backtest_results.csv")
 BRACKET_GRID_OUTPUT_FILE = os.path.expanduser("~/trading-system/logs/backtest_bracket_grid.csv")
 
@@ -410,9 +410,13 @@ def run_ablation_study(df):
     v1_signals = all_signals
     v2_signals = [s for s in all_signals if s[2] >= MIN_CONFIDENCE]
     # v3 "full system as configured" = signal_logger.py's MIN_VOTES/MIN_CONFIDENCE
-    # gate + trade_logic.py's own 51% confidence floor. Under current wiring these
-    # produce identical entries to v2: trade_logic.py never sees anything below
-    # signal_logger.py's stricter 70% gate, so its 51% floor can never bind.
+    # gate + trade_logic.py's own MIN_CONFIDENCE_FOR_ENTRY floor. These are now both
+    # set to 50%, so v3 still produces identical entries to v2 -- but for a different
+    # reason than before: the two floors are equal rather than one being unreachable
+    # beneath the other. Keep them in sync. If trade_logic.py's floor is ever raised
+    # above signal_logger.py's, it starts binding and v3 diverges from v2 -- at 51%
+    # it would silently drop the entire confidence==50 bucket, which is the bucket
+    # that makes the 50% floor outperform 60% and 70% in the first place.
     v3_signals = v2_signals
 
     v1_metrics = compute_trade_metrics(simulate_bracket_trades(df, v1_signals, LIVE_STOP_PCT, LIVE_TP_PCT))
@@ -423,10 +427,10 @@ def run_ablation_study(df):
     rows = []
     for version, description, metrics in [
         ("v1_technical_only", "Technical signal only, no confidence filter", v1_metrics),
-        ("v2_confidence_70", f"Technical signal + {MIN_CONFIDENCE:.0f}% confidence floor", v2_metrics),
+        (f"v2_confidence_{MIN_CONFIDENCE:.0f}", f"Technical signal + {MIN_CONFIDENCE:.0f}% confidence floor", v2_metrics),
         ("v3_full_system", "Full system as currently configured (identical entries to v2 -- "
-                            "trade_logic.py's 51% floor never binds beneath signal_logger.py's "
-                            "70% gate)", v3_metrics),
+                            "trade_logic.py's entry floor and signal_logger.py's gate are both "
+                            f"set to {MIN_CONFIDENCE:.0f}%)", v3_metrics),
         ("v4_buy_and_hold", "Buy-and-hold SPY benchmark (daily-return based, not trade-based)", v4_metrics),
     ]:
         row = {"version": version, "description": description}
@@ -535,7 +539,7 @@ def run():
     confidence_votes_grid_results = run_confidence_votes_grid(df)
     print_and_save_confidence_votes_grid(confidence_votes_grid_results)
 
-    print("\nRunning ablation study (technical-only, 70% floor, full system, buy-and-hold)...")
+    print(f"\nRunning ablation study (technical-only, {MIN_CONFIDENCE:.0f}% floor, full system, buy-and-hold)...")
     ablation_rows = run_ablation_study(df)
     print_and_save_ablation(ablation_rows)
 

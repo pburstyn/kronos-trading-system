@@ -58,7 +58,7 @@
 - **Ticker:** SPY
 - **Lookback:** 250 days
 - **MIN_VOTES:** 3
-- **MIN_CONFIDENCE:** 70.0
+- **MIN_CONFIDENCE:** 50.0 (lowered from 70.0 on September 26 2026 — see Confidence Floor Lowered to 50% section)
 - **Indicators:** RSI(14), MACD(12,26,9), MA50, MA200, Volume MA20
 - **MA structure:** Casts bull/bear vote (fixed May 16 2026)
 
@@ -141,9 +141,9 @@
 - **andy_reasoning.py (Analyst 1) left on Haiku** — this swap was scoped to the Critic only.
 
 ## Entry/Exit Logic — COMPLETED (scripts/trade_logic.py)
-- Long entry: MACD above signal + RSI < 70 + histogram positive + confidence > 51%
+- Long entry: MACD above signal + RSI < 70 + histogram positive + confidence >= 50%
 - Short entry: Daily close below key support with MACD bearish + RSI bearish
-- Hard confidence floor: 51% minimum for any directional entry (checked independently of verdict)
+- Hard confidence floor: 50% minimum for any directional entry (checked independently of verdict). **Lowered from 51% to 50% on September 26 2026 and must stay equal to signal_logger.py's MIN_CONFIDENCE** — at 51% it silently drops the entire confidence==50 bucket, which is exactly the bucket that makes the 50% floor worth having.
 - Position sizing: VETO blocks entirely, FLAG = 0.5x size, PASS = 1x size
 - Stop-loss: 2% from entry (above for shorts, below for longs)
 - Take-profit: 3-5% from entry
@@ -228,10 +228,30 @@
 - **Output:** `logs/backtest_ablation.csv` — tracked in git (explicit exception in `.gitignore`; every other `logs/backtest_*.csv` output is gitignored and regenerated per run).
 - **Result (325 historical signals as of Sep 6):** v1 (no filter) had the highest total PnL ($1,999.65, 1.32 profit factor) but also the deepest drawdown (127%). v2/v3 (live 70% floor) cut PnL to $847.04 (1.24 profit factor, 90% drawdown) for roughly the same win rate (45.2% vs 46.7%) — the floor filters out a large volume of collectively-profitable trades, not just noise. v4 (buy-and-hold) landed close to v2/v3's total return ($851.75) with far less drawdown (18.76%), suggesting the active strategy takes on much more drawdown risk for a similar headline return over this window.
 
+## Confidence Floor Lowered to 50% — COMPLETED (September 26)
+- **Change:** `signal_logger.py` `MIN_CONFIDENCE` 70.0 -> 50.0, `trade_logic.py` `MIN_CONFIDENCE_FOR_ENTRY` 51.0 -> 50.0, `backtest.py` `MIN_CONFIDENCE` 70.0 -> 50.0. All three now sit at 50.0 and **must be kept in sync**.
+- **Original request was 51.0** (to match `trade_logic.py`'s then-stated floor). Measurement showed 51 is the single worst value available, so it was not used. See below.
+- **Confidence is always a multiple of 10.** `base` is 40 or 60; every adjustment is +/-10 or +/-20; the result is clamped to 99. Measured distribution over 617 directional signals (min_votes=3, 2023-01-01 to 2026-09-26): conf 30:9, 40:68, **50:81**, 60:122, 70:123, 80:127, 90:62, 99:25. Nothing whatsoever lands between 51 and 59.
+- **Therefore a 51% floor is arithmetically identical to a 60% floor** — it admits the 60-bucket and excludes the 50-bucket. Measured on the live 2%/3% bracket:
+
+  | Floor | Trades | Win% | Total PnL | Profit factor | Max DD | PnL/trade |
+  |-------|--------|------|-----------|---------------|--------|-----------|
+  | 50 | 540 | 42.6% | **$762.21** | 1.12 | $1,865 | $1.41 |
+  | 51 (= 60) | 459 | 40.9% | $256.78 | 1.05 | $1,745 | $0.56 |
+  | 70 (previous live) | 337 | 43.2% | $563.95 | 1.15 | $1,138 | $1.67 |
+
+  The August 30 "50% floor is best" finding is carried **entirely** by the 81 signals at confidence exactly 50. A 51% floor discards that bucket, keeps the weak 60-bucket, and lands 54% below the 70% floor it was meant to improve on.
+- **Why `trade_logic.py` had to move too — this was the trap.** The August 30 note said the fix "belongs in `signal_logger.py`'s MIN_CONFIDENCE, not `trade_logic.py`". That was true only while signal_logger's gate was the stricter of the two. Once signal_logger drops to 50, `trade_logic.py`'s 51 floor **starts binding for the first time** and rejects precisely the conf==50 bucket — silently collapsing the system to the $256.78 worst case while every config file reads "50". Both floors moved together. **Invariant: `trade_logic.py`'s `MIN_CONFIDENCE_FOR_ENTRY` must never exceed `signal_logger.py`'s `MIN_CONFIDENCE`.**
+- **`backtest.py` never read `signal_logger.py`** — it carries its own `MIN_CONFIDENCE` constant and imports nothing from the live scripts. Before this change, editing `signal_logger.py` and re-running the backtest validated nothing at all; the backtest silently kept testing 70%. Its constant was moved to 50.0 so the ablation's v2/v3 rows and the confidence/votes grid's "current live setting" line actually track live config. **This decoupling still exists** — the three constants are independent and must be updated together by hand.
+- **Baseline decay, unrelated to this change (important):** re-running the *unmodified* 70% backtest on 2026-09-26 gave 337 trades / 43.2% / $563.95, against the September 6 figures of 325 / 45.2% / $847.04. Same code, same setting — roughly three weeks of additional SPY data cost $283 of historical PnL and 2.0pp of win rate. The September 6 numbers quoted anywhere else in this file are stale for comparison purposes.
+- **Post-change results (540 signals, 2023-01-01 to 2026-09-26):** next-day accuracy 54.8% (below the 55% "edge" bar, so the script still prints NO EDGE). Ablation on the live 2%/3% bracket: v1 no-filter 617 trades / 44.8% / $1,522.21 / PF 1.23 / DD $1,655; v2=v3 50% floor 540 trades / 42.6% / $762.21 / PF 1.12 / DD $1,865; v4 buy-and-hold $859.14 / PF 1.31 / DD $271.73. In the confidence/votes grid the live setting now ranks **#1 of 15** (was #4).
+- **Honest read of the tradeoff:** total PnL improves ($563.95 -> $762.21) but every risk-adjusted measure gets worse — profit factor 1.15 -> 1.12, max drawdown $1,138 -> $1,865 (+64%), profit-per-trade $1.67 -> $1.41, and trade count jumps 337 -> 540 (+60%). Buy-and-hold still beats the active strategy on both total return ($859.14) and drawdown ($271.73) over this window. This change buys more gross dollars by taking materially more risk and placing 60% more trades; it does not fix the underlying edge problem.
+- **Live paper record remains 0 wins / 5 losses** — this change widens the funnel, it does not address why the five trades that did fire all stopped out.
+
 ## Telegram Notifications — COMPLETED (June 20)
 - **Bot:** @Peters_Open_Claw_Bot (same bot OpenClaw/Andy uses). No new bot needed.
 - **Script:** `scripts/telegram_notify.py` — reads botToken from `/mnt/c/Users/openc/.openclaw/openclaw.json` (channels.telegram.botToken), reads Peter's personal chat ID from `.env` (TELEGRAM_CHAT_ID = 8344685831).
-- **Trigger:** ENTER decisions only (UP or DOWN with PASS or FLAG verdict, confidence ≥ 51%, today's date). Exits silently on NEUTRAL, VETO, or stale signal — never spams.
+- **Trigger:** ENTER decisions only (UP or DOWN with PASS or FLAG verdict, confidence >= 50%, today's date). Exits silently on NEUTRAL, VETO, or stale signal — never spams.
 - **Message includes:** direction, confidence, entry price, stop-loss, take-profit range, verdict, notional size ($1,000 PASS / $500 FLAG).
 - **Pipeline position:** after alpaca_execute.py (order is placed before notification fires): `trade_logic → alpaca_execute → telegram_notify → dashboard`
 - **Why chat ID is in .env, not openclaw.json:** openclaw.json's allowFrom field contained a stale group chat ID. Peter's personal Telegram user ID was obtained via @userinfobot and stored in .env so Kronos notifications are independent of OpenClaw's config.

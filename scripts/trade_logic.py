@@ -5,7 +5,7 @@ BASE_POSITION_SIZE = 1
 STOP_LOSS_PCT = 0.02
 TAKE_PROFIT_PCT_LOW = 0.03
 TAKE_PROFIT_PCT_HIGH = 0.05
-MIN_CONFIDENCE_FOR_ENTRY = 51.0
+MIN_CONFIDENCE_FOR_ENTRY = 50.0
 
 def extract_verdict(row):
     """Return clean PASS/FLAG/VETO from a decisions_log row.
