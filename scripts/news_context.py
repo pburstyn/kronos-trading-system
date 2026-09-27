@@ -50,7 +50,13 @@ def fetch_news():
 
 
 def get_news_context():
-    """Read cached headlines. Returns a formatted string for analyst prompts."""
+    """Read cached headlines. Returns a formatted string for analyst prompts.
+    An optional "seasonal_note" field in the cache -- not written by run(),
+    only ever added manually for a specific day -- renders as a separate,
+    clearly-labeled block after the headlines. This is a generic, reusable
+    hook, not tied to any particular note's content or date; run() will not
+    carry a seasonal_note forward into tomorrow's cache unless one is added
+    again by hand."""
     if not os.path.isfile(NEWS_CACHE):
         return "Today's headlines: unavailable (run news_context.py first)"
 
@@ -62,12 +68,17 @@ def get_news_context():
 
     articles = data.get("articles", [])
     if not articles:
-        return "Today's headlines: none matching financial keywords"
+        lines = ["Today's headlines: none matching financial keywords"]
+    else:
+        lines = ["Today's relevant financial headlines:"]
+        for a in articles:
+            tag = f" [{a['source']}, {a['time']}]" if a.get("source") else ""
+            lines.append(f"- {a['headline']}{tag}")
 
-    lines = ["Today's relevant financial headlines:"]
-    for a in articles:
-        tag = f" [{a['source']}, {a['time']}]" if a.get("source") else ""
-        lines.append(f"- {a['headline']}{tag}")
+    seasonal_note = data.get("seasonal_note")
+    if seasonal_note:
+        lines.append("")
+        lines.append(seasonal_note)
 
     return "\n".join(lines)
 
