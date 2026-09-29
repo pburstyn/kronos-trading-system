@@ -18,6 +18,7 @@
 - `scripts/run_pipeline.sh` — Master pipeline script
 - `scripts/backtest.py` — Historical backtest script
 - `scripts/backtest_qqq.py` — **Added September 26.** Runs the same GTC bracket stop/take-profit grid as backtest.py but against QQQ history. Imports backtest.py as a module and reuses its get_historical_data()/compute_indicators()/generate_signal()/run_bracket_grid() directly rather than re-copying the vote logic, so it always tracks whatever MIN_VOTES/MIN_CONFIDENCE/grid backtest.py is set to. Only defines its own TICKER and output path. Writes logs/backtest_qqq_bracket_grid.csv.
+- `scripts/session_init.py` — **Added September 28. Standalone, pipeline-independent — never wired into run_pipeline.sh.** Manually run (via the `kronos-init` shell alias) to build a context briefing for pasting into a *new* Claude chat session: fetches the live `CLAUDE.md` from GitHub's `main` branch (falls back to the local file, clearly labeled, if the fetch fails), reads the last 5 rows of `logs/signal_log.csv` and `logs/alpaca_orders.csv` and the last 3 rows of `logs/signal_log_qqq.csv`, formats it all into one plain-text briefing, and copies it to the clipboard via `clip.exe` (WSL2-specific interop; verified UTF-8 round-trips correctly, no encoding conversion needed in this environment). See Session Init Script section.
 - `scripts/compare_ema_rsi.py` — EMA crossover vs Kronos comparison script
 - `scripts/kimi_reasoning.py` — Kimi K2 (via NVIDIA NIM) reasons about the signal. **No longer called from run_pipeline.sh as of July 9** (see Analyst 2 Swap section) — left intact for manual use in case NVIDIA access is restored.
 - `scripts/hy3_reasoning.py` — Hy3 (via OpenRouter, model `tencent/hy3:free`) reasons about the signal. **No longer called from run_pipeline.sh as of July 17** (see Analyst 2 Swap: Hy3 → Kimi K3 section) — left intact for manual use. Free tier until July 21 2026. Mirrors kimi_reasoning.py's structure (macro/sentiment/news context, same prompt shape). Logs to logs/hy3_reasoning_log.csv.
@@ -297,6 +298,15 @@
 - **No QQQ entry alert added, deliberately** — there is no QQQ `decisions_log.csv` or `trade_logic.py` run for QQQ (see QQQ Second Instrument section: signal-capture-only), so there is nothing for an ENTER alert to report. This is a passive daily FYI only, matching what was asked.
 - **Tested (September 26):** live `--dry-run` against real logs correctly SKIPped both the SPY ENTER alert and SPY daily summary (that day's SPY signal was still Sep 25 — today's 6pm pipeline run hadn't fired yet) while sending the QQQ daily summary (QQQ's log did have a today-dated row from earlier manual testing) — confirming the three checks are independent and a stale/missing SPY log doesn't block QQQ. Separately verified: `send_qqq_daily_summary()` prints a graceful skip (no crash) when `QQQ_SIGNAL_LOG` points at a nonexistent file, and `send_daily_summary()` does the same for a missing `SIGNAL_LOG` — the two paths don't share failure state.
 
+## Session Init Script — COMPLETED (September 28)
+- **Purpose:** a one-shot briefing generator for starting a *new* Claude chat session with full Kronos context, rather than re-explaining the system from scratch each time. Not part of the trading pipeline — `scripts/session_init.py` is never called from `run_pipeline.sh` and touches no trading state; it only reads.
+- **What it builds:** last 5 rows of `logs/signal_log.csv` (SPY) and `logs/alpaca_orders.csv`, last 3 rows of `logs/signal_log_qqq.csv`, plus the full live `CLAUDE.md` fetched from `raw.githubusercontent.com/pburstyn/kronos-trading-system/main/CLAUDE.md` (this repo is public, so no auth/token needed) — deliberately the GitHub copy, not the local working-tree file, so the briefing reflects what's actually pushed rather than picking up uncommitted local edits. Falls back to the local file, clearly labeled as a fallback, if the fetch fails (network down, repo made private, etc.) rather than dropping CLAUDE.md from the briefing.
+- **Layout:** live status (SPY/QQQ signals, Alpaca orders) first, full CLAUDE.md reference last — the freshest, most action-relevant facts appear before the large static reference document, on the theory that whoever reads the pasted briefing wants the current state up front.
+- **Numeric formatting:** `alpaca_orders.csv` has legacy rows with float-precision artifacts from an old computation (e.g. `739.3399999999999`, stored as plain text in the CSV). `_money()` rounds these to 2 decimals for display only — the source CSV is untouched, this is purely how `session_init.py` renders it.
+- **Clipboard: `clip.exe` via WSL2 interop.** Verified directly (piped a string containing an em dash, a curly apostrophe, and an accented character to `clip.exe`, then read it back with `powershell.exe -Command "Get-Clipboard"`) that UTF-8 round-trips correctly in this environment with no corruption — no `iconv`/UTF-16LE conversion needed here, unlike some WSL setups where `clip.exe` mangles non-ASCII input. If the clipboard copy fails for any reason, the script prints the full briefing to stdout instead of silently losing it.
+- **`kronos-init` alias added to `~/.bashrc`** (not part of this git repo — `/home/pburstyn` itself isn't a git repository, so this edit lives outside `kronos-trading-system` entirely and isn't pushed anywhere): `alias kronos-init='~/trading-system/venv/bin/python3 ~/trading-system/scripts/session_init.py'`, using the venv's Python directly by full path rather than relying on an activated shell, so it works regardless of the calling shell's state.
+- **Tested (September 28):** ran directly (`python3 scripts/session_init.py`) and via the `kronos-init` alias in a fresh `bash -ic` shell (i.e. actually sourcing `.bashrc`, not just calling the script) — both produced an ~88.7K-character briefing and reported a successful clipboard copy. Verified the clipboard contents directly via `powershell.exe -Command "Get-Clipboard -Raw"`: correct length, correct SPY/QQQ/orders sections with the money-rounding fix applied, and the tail matching the genuine GitHub-fetched `CLAUDE.md` (em dashes intact, ending on today's real "Last Signal" line). Also tested: missing/empty CSV files (each renders its own clear placeholder, no crash), non-numeric values through `_money()` (falls back to the raw value), and a broken `CLAUDE_MD_URL` (correctly falls back to the local file with the fallback note appended).
+
 ## Telegram Notifications — COMPLETED (June 20)
 - **Bot:** @Peters_Open_Claw_Bot (same bot OpenClaw/Andy uses). No new bot needed.
 - **Script:** `scripts/telegram_notify.py` — reads botToken from `/mnt/c/Users/openc/.openclaw/openclaw.json` (channels.telegram.botToken), reads Peter's personal chat ID from `.env` (TELEGRAM_CHAT_ID = 8344685831).
@@ -450,6 +460,11 @@
 ```bash
 # Run pipeline manually
 cd ~/trading-system && bash scripts/run_pipeline.sh
+
+# Copy a full session-context briefing to the clipboard (paste into a new Claude chat)
+kronos-init
+# ...or directly, without the alias:
+cd ~/trading-system && python3 scripts/session_init.py
 
 # Run signal logger only (SPY)
 cd ~/trading-system && python3 scripts/signal_logger.py
