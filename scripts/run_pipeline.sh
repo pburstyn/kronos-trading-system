@@ -22,6 +22,7 @@ python3 scripts/news_context.py >> /home/pburstyn/trading-system/logs/pipeline.l
 python3 scripts/andy_reasoning.py >> /home/pburstyn/trading-system/logs/pipeline.log 2>&1
 python3 scripts/kimi_k3_reasoning.py >> /home/pburstyn/trading-system/logs/pipeline.log 2>&1
 python3 scripts/critic.py >> /home/pburstyn/trading-system/logs/pipeline.log 2>&1
+python3 scripts/decision_ledger.py >> /home/pburstyn/trading-system/logs/pipeline.log 2>&1
 python3 scripts/trade_logic.py >> /home/pburstyn/trading-system/logs/pipeline.log 2>&1
 python3 scripts/alpaca_execute.py >> /home/pburstyn/trading-system/logs/pipeline.log 2>&1
 python3 scripts/position_reconfirm.py >> /home/pburstyn/trading-system/logs/pipeline.log 2>&1
