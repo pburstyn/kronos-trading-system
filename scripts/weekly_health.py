@@ -1,3 +1,4 @@
+import csv
 import json
 import os
 import sys
@@ -10,6 +11,7 @@ load_dotenv(os.path.expanduser("~/trading-system/.env"))
 
 OPENCLAW_CONFIG = "/mnt/c/Users/openc/.openclaw/openclaw.json"
 PIPELINE_LOG = os.path.expanduser("~/trading-system/logs/pipeline.log")
+DECISION_LEDGER = os.path.expanduser("~/trading-system/logs/decision_ledger.csv")
 LOOKBACK_DAYS = 7
 
 # Marker strings unique enough to tell whether a given script ran in a day's
@@ -90,12 +92,32 @@ def expected_weekdays(lookback_days):
     return sorted(d for d in days if d.weekday() < 5)
 
 
-def check_day(block):
+def get_ledger_dates():
+    """Dates that got at least one decision_ledger.csv row, keyed off
+    ledger_timestamp (when the row was written, same local clock as the
+    pipeline.log 'Pipeline starting' line). Checked against the CSV itself, not
+    a pipeline.log marker, so a run where decision_ledger.py printed but wrote
+    nothing (e.g. its header-mismatch refusal) still gets flagged."""
+    if not os.path.isfile(DECISION_LEDGER):
+        return set()
+    dates = set()
+    with open(DECISION_LEDGER, newline="") as f:
+        for row in csv.DictReader(f):
+            try:
+                dates.add(datetime.strptime(row["ledger_timestamp"][:10], "%Y-%m-%d").date())
+            except (KeyError, TypeError, ValueError):
+                continue
+    return dates
+
+
+def check_day(block, has_ledger_row):
     """Return (missing_scripts, flag_lines) for one day's pipeline block."""
     missing_scripts = [
         script for script, markers in EXPECTED_SCRIPTS.items()
         if not any(marker in block for marker in markers)
     ]
+    if not has_ledger_row:
+        missing_scripts.append("decision_ledger (no row in decision_ledger.csv)")
     flag_lines = [
         line.strip() for line in block.splitlines()
         if any(keyword in line for keyword in FLAG_KEYWORDS)
@@ -114,7 +136,7 @@ def build_message(findings, missing_days):
             f"Kronos Weekly Health Check — {now}\n\n"
             f"All clear. Every weekday pipeline run in the last {LOOKBACK_DAYS} days completed "
             f"with no errors, tracebacks, or skips, and all expected scripts "
-            f"({script_list}) ran."
+            f"({script_list}) ran, and decision_ledger.csv got a new row each day."
         )
 
     lines = [f"Kronos Weekly Health Check — {now}", ""]
@@ -155,9 +177,10 @@ def run(dry_run=False):
     cutoff = datetime.now().date() - timedelta(days=LOOKBACK_DAYS)
     blocks = {d: b for d, b in split_into_daily_blocks(lines).items() if d and d >= cutoff}
 
+    ledger_dates = get_ledger_dates()
     findings = []
     for date in sorted(blocks):
-        missing, flags = check_day(blocks[date])
+        missing, flags = check_day(blocks[date], date in ledger_dates)
         if missing or flags:
             findings.append((date, missing, flags))
 
