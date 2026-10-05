@@ -39,12 +39,17 @@ REDDIT_ARXIV_KEYWORDS = [
     "systematic",
 ]
 
-# Public JSON endpoint, no OAuth -- but Reddit's own bot-detection can still
-# block it outright regardless of headers (see note on fetch_reddit_posts()).
+# OAuth app-only (client_credentials) access -- the public .json endpoints
+# 403 unauthenticated requests from the production machine too (confirmed
+# October 5). Needs REDDIT_CLIENT_ID / REDDIT_CLIENT_SECRET in .env from a
+# "script" app registered at https://www.reddit.com/prefs/apps.
 REDDIT_SUBREDDITS = ["MachineLearning", "algotrading", "ArtificialIntelligence"]
 REDDIT_MIN_SCORE = 50
 REDDIT_TOP_N = 3
-REDDIT_HEADERS = {"User-Agent": "kronos-tech-watch/1.0 (by /u/pburstyn)"}
+REDDIT_TOKEN_URL = "https://www.reddit.com/api/v1/access_token"
+REDDIT_API_BASE = "https://oauth.reddit.com"
+# Reddit's required UA format: <platform>:<app ID>:<version> (by /u/<username>)
+REDDIT_USER_AGENT = "linux:kronos-tech-watch:1.1 (by /u/pburstyn)"
 
 ARXIV_FEEDS = {
     "cs.AI": "https://arxiv.org/rss/cs.AI",
@@ -114,24 +119,53 @@ def fetch_hn_stories(since_ts):
     return sorted(seen.values(), key=lambda s: s["points"], reverse=True)[:TOP_N]
 
 
+def get_reddit_token():
+    """App-only OAuth token via the client_credentials grant (read-only
+    access to public subreddits, no Reddit username/password stored).
+    Returns None, with a WARNING printed, if credentials are missing or the
+    token request fails."""
+    client_id = os.environ.get("REDDIT_CLIENT_ID")
+    client_secret = os.environ.get("REDDIT_CLIENT_SECRET")
+    if not client_id or not client_secret:
+        print("  WARNING: REDDIT_CLIENT_ID / REDDIT_CLIENT_SECRET not set in .env -- skipping Reddit.")
+        return None
+    try:
+        resp = requests.post(
+            REDDIT_TOKEN_URL,
+            auth=(client_id, client_secret),
+            data={"grant_type": "client_credentials"},
+            headers={"User-Agent": REDDIT_USER_AGENT},
+            timeout=10,
+        )
+        resp.raise_for_status()
+        token = resp.json().get("access_token")
+    except Exception as e:
+        print(f"  WARNING: Reddit OAuth token request failed: {e}")
+        return None
+    if not token:
+        # Reddit returns 200 with {"error": ...} for some bad-credential cases.
+        print(f"  WARNING: Reddit OAuth returned no access_token: {resp.text[:200]}")
+        return None
+    return token
+
+
 def fetch_reddit_posts(since_ts):
     """Returns (posts, any_source_reachable). The second value lets
     build_message() distinguish "checked, nothing matched" from "couldn't
-    reach Reddit at all" -- an important distinction here specifically:
-    Reddit's public .json endpoints now frequently 403 or redirect
-    unauthenticated requests to a login page regardless of User-Agent,
-    a change from their 2023 API lockdown that affects many non-residential
-    IPs. Confirmed happening in the environment this was developed in
-    (403 from www.reddit.com, redirect-to-login from old.reddit.com, 403
-    from api.reddit.com, tried with several realistic browser User-Agents) --
-    unverified whether the production machine's residential IP fares
-    differently. See CLAUDE.md Tech Watch Extended section."""
+    reach Reddit at all". Uses Reddit's OAuth API (oauth.reddit.com) --
+    the unauthenticated public .json endpoints return 403 Blocked from both
+    the dev environment and the production machine. See CLAUDE.md Tech
+    Watch Extended section."""
+    token = get_reddit_token()
+    if not token:
+        return [], False
+    headers = {"Authorization": f"bearer {token}", "User-Agent": REDDIT_USER_AGENT}
     seen = {}
     any_ok = False
     for subreddit in REDDIT_SUBREDDITS:
-        url = f"https://www.reddit.com/r/{subreddit}/hot.json"
+        url = f"{REDDIT_API_BASE}/r/{subreddit}/hot"
         try:
-            resp = requests.get(url, headers=REDDIT_HEADERS, params={"limit": 25}, timeout=10)
+            resp = requests.get(url, headers=headers, params={"limit": 25, "raw_json": 1}, timeout=10)
             resp.raise_for_status()
             data = resp.json()
         except Exception as e:
