@@ -1,6 +1,6 @@
 import json
 import os
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 
 import requests
 from dotenv import load_dotenv
@@ -15,6 +15,7 @@ from alpaca.data.requests import StockLatestTradeRequest
 
 OPENCLAW_CONFIG = "/mnt/c/Users/openc/.openclaw/openclaw.json"
 TICKER = "SPY"
+ACTIVE_LEG_STATUSES = {"new", "accepted", "held", "pending_new", "partially_filled", "pending_replace"}
 
 
 def get_telegram_config():
@@ -44,16 +45,39 @@ def get_spy_price(dc):
 
 
 def leg_status_lines(tc):
+    # QueryOrderStatus.OPEN omits bracket stop legs sitting in "held" status,
+    # so the stop never showed. Pull ALL recent orders with legs nested,
+    # flatten, and filter by status ourselves.
     try:
-        orders = tc.get_orders(GetOrdersRequest(status=QueryOrderStatus.OPEN, symbols=[TICKER]))
-        legs = []
+        orders = tc.get_orders(GetOrdersRequest(
+            status=QueryOrderStatus.ALL,
+            symbols=[TICKER],
+            nested=True,
+            after=datetime.now(timezone.utc) - timedelta(days=100),
+            limit=500,
+        ))
+        flat = {}
         for order in orders:
-            if order.order_type is not None:
-                otype = str(order.order_type).split(".")[-1]
-                price = order.limit_price or order.stop_price
-                status = str(order.status).split(".")[-1]
-                legs.append(f"  {otype} @ ${price} ({status})")
-        return "\n".join(legs) if legs else "  (no active legs found)"
+            for o in [order] + list(order.legs or []):
+                flat.setdefault(str(o.id), o)
+
+        legs = []
+        has_stop = False
+        for o in flat.values():
+            status = getattr(o.status, "value", str(o.status).split(".")[-1]).lower()
+            if status not in ACTIVE_LEG_STATUSES:
+                continue
+            otype = getattr(o.order_type, "value", str(o.order_type).split(".")[-1]).lower()
+            if "stop" in otype:
+                has_stop = True
+                legs.append(f"  STOP LOSS @ ${o.stop_price} ({status})")
+            elif "limit" in otype:
+                legs.append(f"  TAKE PROFIT @ ${o.limit_price} ({status})")
+            else:
+                legs.append(f"  {otype} @ ${o.limit_price or o.stop_price} ({status})")
+        if not has_stop:
+            legs.append("  WARNING: NO STOP LEG FOUND. Check Alpaca now.")
+        return "\n".join(legs)
     except Exception:
         return "  (could not fetch leg status)"
 
