@@ -30,6 +30,7 @@ python3 scripts/telegram_notify.py >> /home/pburstyn/trading-system/logs/pipelin
 python3 scripts/dashboard.py >> /home/pburstyn/trading-system/logs/pipeline.log 2>&1
 python3 scripts/auto_logger.py >> /home/pburstyn/trading-system/logs/pipeline.log 2>&1
 python3 scripts/outcome_tracker.py >> /home/pburstyn/trading-system/logs/pipeline.log 2>&1
+python3 scripts/trade_ledger.py >> /home/pburstyn/trading-system/logs/pipeline.log 2>&1
 
 echo "$(date) — Pipeline complete" >> /home/pburstyn/trading-system/logs/pipeline.log
 bash /home/pburstyn/trading-system/scripts/update_claude_md.sh >> /home/pburstyn/trading-system/logs/pipeline.log 2>&1
