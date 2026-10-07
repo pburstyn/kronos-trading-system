@@ -16,6 +16,7 @@ from trade_logic import get_latest_decision_row, make_trade_decision, extract_ve
 OPENCLAW_CONFIG = "/mnt/c/Users/openc/.openclaw/openclaw.json"
 SIGNAL_LOG = os.path.expanduser("~/trading-system/logs/signal_log.csv")
 QQQ_SIGNAL_LOG = os.path.expanduser("~/trading-system/logs/signal_log_qqq.csv")
+ALPACA_ORDERS_LOG = os.path.expanduser("~/trading-system/logs/alpaca_orders.csv")
 
 
 def get_telegram_config():
@@ -26,10 +27,22 @@ def get_telegram_config():
     return token, chat_id
 
 
-def build_message(decision, row):
+def has_order_today(path=ALPACA_ORDERS_LOG):
+    if not os.path.isfile(path):
+        return False
+    today_date = datetime.now().strftime("%Y-%m-%d")
+    with open(path, "r") as f:
+        return any(r["timestamp"].startswith(today_date) for r in csv.DictReader(f))
+
+
+def build_message(decision, row, order_placed=True):
     direction_label = "UP (Long)" if decision["direction"] == "UP" else "DOWN (Short)"
     notional = "$1,000" if decision["verdict"] == "PASS" else "$500"
     size_label = "full size" if decision["verdict"] == "PASS" else "half size"
+    if order_placed:
+        order_line = f"{notional} paper order queued for next market open."
+    else:
+        order_line = "Order BLOCKED, SPY position already open. No new order placed."
 
     return (
         f"Kronos ENTER Signal\n"
@@ -41,7 +54,7 @@ def build_message(decision, row):
         f"Take-profit:  ${decision['take_profit_low']} – ${decision['take_profit_high']}\n"
         f"Verdict:      {decision['verdict']} ({size_label})\n"
         f"\n"
-        f"{notional} paper order queued for next market open."
+        f"{order_line}"
     )
 
 
@@ -139,7 +152,8 @@ def send_entry_alert(dry_run):
         print(f"  NO ENTER ALERT: {decision['reason']}")
         return
 
-    message = build_message(decision, row)
+    order_placed = has_order_today()
+    message = build_message(decision, row, order_placed)
     send_message(message, dry_run, "ENTER alert")
 
 
