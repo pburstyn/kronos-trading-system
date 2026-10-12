@@ -160,6 +160,17 @@ def build_message(findings, missing_days):
     return "\n".join(lines).rstrip()
 
 
+def shadow_bracket_lines():
+    """Weekly old-vs-current bracket comparison from logs/shadow_brackets.csv.
+    Never lets a shadow tracker problem block the health check itself."""
+    try:
+        sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+        from shadow_brackets import weekly_summary_lines
+        return weekly_summary_lines()
+    except Exception as e:
+        return [f"Shadow brackets: summary unavailable ({e})."]
+
+
 def run(dry_run=False):
     print("\n-- Weekly Pipeline Health Check --")
 
@@ -187,6 +198,7 @@ def run(dry_run=False):
     missing_days = [d for d in expected_weekdays(LOOKBACK_DAYS) if d not in blocks]
 
     message = build_message(findings, missing_days)
+    message += "\n\n" + "\n".join(shadow_bracket_lines())
     print(message)
 
     if dry_run:

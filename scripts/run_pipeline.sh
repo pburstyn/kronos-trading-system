@@ -23,6 +23,9 @@ python3 scripts/andy_reasoning.py >> /home/pburstyn/trading-system/logs/pipeline
 python3 scripts/kimi_k3_reasoning.py >> /home/pburstyn/trading-system/logs/pipeline.log 2>&1
 python3 scripts/critic.py >> /home/pburstyn/trading-system/logs/pipeline.log 2>&1
 python3 scripts/decision_ledger.py >> /home/pburstyn/trading-system/logs/pipeline.log 2>&1
+# Shadow bracket tracker: old 2%/3% vs current 2.5%/4% on every signal at or
+# above the confidence floor, traded or not. Read-only, places no orders.
+python3 scripts/shadow_brackets.py >> /home/pburstyn/trading-system/logs/pipeline.log 2>&1
 python3 scripts/trade_logic.py >> /home/pburstyn/trading-system/logs/pipeline.log 2>&1
 python3 scripts/alpaca_execute.py >> /home/pburstyn/trading-system/logs/pipeline.log 2>&1
 python3 scripts/position_reconfirm.py >> /home/pburstyn/trading-system/logs/pipeline.log 2>&1
