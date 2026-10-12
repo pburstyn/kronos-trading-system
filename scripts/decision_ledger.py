@@ -39,6 +39,25 @@ COLUMNS = [
     "commit_hash", "code_dirty",
 ]
 
+# trade_action values. BLOCKED is split into reason codes (October 12) so the
+# ledger shows WHY a signal did not trade. Rows written before October 12 carry
+# a bare "BLOCKED" (always a position-guard block) and record NEUTRAL signals as
+# SKIP. The column set is unchanged, so the header check in append_row() passes.
+#   ENTER                      -- downstream scripts will submit an order
+#   SKIP                       -- non-actionable for another reason (WEAK signal,
+#                                 no Critic row, trade_logic NO_TRADE)
+#   VETO                       -- Critic verdict VETO
+#   BLOCKED_NEUTRAL            -- signal was NEUTRAL, not actionable
+#   BLOCKED_STALE_DATA         -- latest decisions_log.csv entry (what trade_logic
+#                                 reads) or the signal itself is not from today
+#   BLOCKED_EXISTING_POSITION  -- position guard found an open SPY position or
+#                                 open SPY order
+#   BLOCKED_API_ERROR          -- position guard hit an API error and failed closed
+TRADE_ACTIONS = (
+    "ENTER", "SKIP", "VETO",
+    "BLOCKED_NEUTRAL", "BLOCKED_STALE_DATA", "BLOCKED_EXISTING_POSITION", "BLOCKED_API_ERROR",
+)
+
 MODEL_RE = re.compile(r"""["']?model["']?\s*[:=]\s*["']([^"']+)["']""")
 
 
@@ -115,11 +134,26 @@ def get_commit():
         return f"UNKNOWN ({e})", "unknown"
 
 
-def determine_action(signal, decision_row):
-    """Returns (action, reason) with action in ENTER / SKIP / VETO / BLOCKED."""
+def determine_action(signal, decision_row, latest_decision_row):
+    """Returns (action, reason) with action one of TRADE_ACTIONS.
+    latest_decision_row is the last decisions_log.csv row, the same row
+    trade_logic.py and alpaca_execute.py read for today's decision."""
     direction = signal["direction"]
+    if direction == "NEUTRAL":
+        return "BLOCKED_NEUTRAL", "Signal NEUTRAL, not actionable"
     if direction not in ("UP", "DOWN"):
         return "SKIP", f"Signal {direction}, not actionable"
+
+    # Same staleness rule trade_logic.py applies before deciding.
+    today = datetime.now().strftime("%Y-%m-%d")
+    signal_date = signal["timestamp"].split(" ")[0]
+    if signal_date != today:
+        return "BLOCKED_STALE_DATA", f"Latest signal is from {signal_date}, not today ({today})"
+    if latest_decision_row:
+        decision_date = latest_decision_row["timestamp"].split(" ")[0]
+        if decision_date != today:
+            return "BLOCKED_STALE_DATA", f"Latest decisions log entry is from {decision_date}, not today ({today})"
+
     if not decision_row:
         return "SKIP", "No Critic decision for this signal (critic.py did not log a row)"
 
@@ -144,9 +178,13 @@ def determine_action(signal, decision_row):
         client = TradingClient(os.environ.get("ALPACA_API_KEY"), os.environ.get("ALPACA_SECRET_KEY"), paper=True)
         exposed, reason = check_existing_exposure(client)
     except Exception as e:
-        exposed, reason = True, f"could not run position guard ({e})"
+        return "BLOCKED_API_ERROR", f"ENTER {direction} ({verdict}) blocked, could not run position guard ({e})"
     if exposed:
-        return "BLOCKED", f"ENTER {direction} ({verdict}) blocked by position guard: {reason}"
+        # check_existing_exposure() prefixes every fail-closed error path with
+        # "could not verify". Anything else is a real position or open order.
+        if reason.startswith("could not verify"):
+            return "BLOCKED_API_ERROR", f"ENTER {direction} ({verdict}) blocked by position guard: {reason}"
+        return "BLOCKED_EXISTING_POSITION", f"ENTER {direction} ({verdict}) blocked by position guard: {reason}"
     return "ENTER", f"ENTER {direction}, {verdict} verdict, size {decision['position_size']}"
 
 
@@ -183,9 +221,10 @@ def run():
 
     andy = find_by_timestamp(read_rows(ANDY_LOG), ts)
     kimi = find_by_timestamp(read_rows(KIMI_K3_LOG), ts)
-    decision = find_by_timestamp(read_rows(DECISIONS_LOG), ts)
+    decisions = read_rows(DECISIONS_LOG)
+    decision = find_by_timestamp(decisions, ts)
     commit, dirty = get_commit()
-    action, action_reason = determine_action(signal, decision)
+    action, action_reason = determine_action(signal, decision, decisions[-1] if decisions else None)
 
     row = {
         "ledger_timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
