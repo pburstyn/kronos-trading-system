@@ -17,12 +17,13 @@ HEALTH_LOG = os.path.expanduser("~/trading-system/logs/andy_health.log")
 def check_andy():
     try:
         result = subprocess.run(
-            ["powershell.exe", "-Command",
+            ["/mnt/c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe", "-Command",
              "Test-NetConnection -ComputerName localhost -Port 18789 -InformationLevel Quiet"],
-            capture_output=True, text=True, timeout=15
+            capture_output=True, text=True, timeout=30
         )
         return result.stdout.strip().lower() == "true"
-    except Exception:
+    except Exception as e:
+        log(f"  WARNING: Andy check failed: {e}")
         return False
 
 
