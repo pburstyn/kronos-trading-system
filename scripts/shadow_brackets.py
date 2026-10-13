@@ -1,5 +1,6 @@
 import os
 import csv
+import math
 import sys
 from datetime import datetime, timedelta
 
@@ -52,7 +53,7 @@ BRACKETS = [
 
 COLUMNS = [
     "signal_timestamp", "signal_date", "direction", "confidence_pct", "signal_close",
-    "real_trade_action",
+    "real_trade_action", "raw_signal_action",
     "bracket", "stop_pct", "take_profit_pct",
     "entry_date", "entry_price", "stop_price", "take_profit_price",
     "status", "exit_date", "exit_price", "holding_days",
@@ -87,6 +88,19 @@ def eligible_signals():
     return signals
 
 
+def raw_signal_action(sig):
+    """What the technical signal alone would do, ignoring the analysts and the
+    Critic: ENTER if the direction is UP/DOWN and confidence meets the floor,
+    otherwise SKIP. Compare against real_trade_action (the full council path)."""
+    try:
+        confidence = float(sig.get("confidence_pct", ""))
+    except ValueError:
+        return "SKIP"
+    if sig.get("direction") in ("UP", "DOWN") and confidence >= MIN_CONFIDENCE:
+        return "ENTER"
+    return "SKIP"
+
+
 def ledger_actions():
     """signal_timestamp -> trade_action, last row wins."""
     return {r["signal_timestamp"]: r.get("trade_action", "") for r in read_rows(LEDGER)}
@@ -105,8 +119,14 @@ def get_daily_bars(start_date):
         date = idx.strftime("%Y-%m-%d")
         if date > today or (date == today and now.hour < BAR_COMPLETE_HOUR):
             continue
-        bars.append({"date": date, "open": float(r["open"]), "high": float(r["high"]),
-                     "low": float(r["low"]), "close": float(r["close"])})
+        bar = {"date": date, "open": float(r["open"]), "high": float(r["high"]),
+               "low": float(r["low"]), "close": float(r["close"])}
+        # yfinance can return the current day's bar with a NaN field (seen
+        # October 12: close=NaN at 5pm PT). A NaN high/low compares False and
+        # would silently miss a leg hit, so drop the bar until it's complete.
+        if any(math.isnan(bar[k]) for k in ("open", "high", "low", "close")):
+            continue
+        bars.append(bar)
     return bars
 
 
@@ -173,6 +193,7 @@ def build_rows(signals, bars, actions):
                 "direction": sig["direction"], "confidence_pct": sig["confidence_pct"],
                 "signal_close": sig["last_close"],
                 "real_trade_action": actions.get(sig["timestamp"], ""),
+                "raw_signal_action": raw_signal_action(sig),
                 "bracket": name, "stop_pct": f"{stop_pct * 100:g}", "take_profit_pct": f"{tp_pct * 100:g}",
                 "updated_at": updated_at,
             })
