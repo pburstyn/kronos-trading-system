@@ -6,6 +6,8 @@ import csv
 import os
 from datetime import datetime
 
+import regime_filter
+
 TICKER = "SPY"
 LOOKBACK = 250
 MIN_VOTES = 3
@@ -153,6 +155,15 @@ def run():
         print("Not enough data. Try again later.")
         return
     df = compute_indicators(df)
+    # Regime classification, OBSERVE-ONLY (October 13): logged to
+    # logs/regime_log.csv before the confidence check, never changes the signal.
+    # See regime_filter.py. A failure here must not stop the signal from logging.
+    try:
+        regime = regime_filter.classify(df, TICKER)
+        regime_filter.log_regime(regime)
+        print(f"Regime: {regime['regime']} ({regime['reason']}) [observe-only]")
+    except Exception as e:
+        print(f"WARNING: regime classification failed ({e}), signal unaffected")
     direction, confidence, vote_log = generate_signal(df)
     last_close = df.iloc[-1]["close"]
     if direction == "NEUTRAL":

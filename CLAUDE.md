@@ -15,6 +15,8 @@
 - `scripts/critic.py` — Issues PASS/FLAG/VETO verdict
 - `scripts/decision_ledger.py` — **Added September 30 (Julius AI recommendation).** Wired into run_pipeline.sh immediately after critic.py. Appends one row per pipeline run to logs/decision_ledger.csv: signal direction/confidence, the four indicator values and votes parsed from signal_log.csv (MA structure, RSI, MACD vs signal, MACD histogram) plus raw votes text, the exact news context text the analysts received (via news_context.get_news_context()), Andy's and Kimi K3's full reasoning and the Critic's verdict/confidence/reason (all matched to the signal by timestamp), trade action, full git commit hash plus a code_dirty flag (uncommitted changes under scripts/), and the Andy/Kimi K3/Critic model IDs read from each script's source at run time. Trade action is ENTER/SKIP/VETO or one of four BLOCKED_* reason codes (October 12, see Decision Ledger BLOCKED Reason Codes section), computed ahead of trade_logic.py/alpaca_execute.py using the same `make_trade_decision()` and the same read-only `check_existing_exposure()` position guard (before October 12, a bare BLOCKED meant would ENTER but the guard found exposure or failed closed). Read-only: never submits orders, changes no trading settings. Append-only: header written once on file creation; if the existing header ever stops matching the current column list, the script refuses to write and prints an ERROR rather than misaligning rows (the July 9 decisions_log.csv bug).
 - `scripts/dashboard.py` — Generates dashboard.html
+- `scripts/regime_filter.py` — **Added October 13. OBSERVE-ONLY.** Classifies SPY as TRENDING (MA50 > MA200 and 20-day daily-return vol < `VOL_THRESHOLD_PCT`, placeholder 0.77%) or CHOPPY. Called from signal_logger.py before the confidence check. Appends to `logs/regime_log.csv` and adds a Regime line to the SPY Telegram daily summary. Blocks nothing. See Regime Filter section.
+- `scripts/backtest_regime.py` — **Added October 13.** Regime filter backtest. Writes `logs/backtest_regime.csv`. See Regime Filter section.
 - `scripts/shadow_brackets.py` — **Added October 12 (Julius AI recommendation).** Read-only. Wired into run_pipeline.sh right after decision_ledger.py. Tracks every SPY signal at or above the confidence floor since 2026-09-26, traded or not, under two hypothetical GTC brackets: old 2%/3% and current 2.5%/4%. Rebuilds `logs/shadow_brackets.csv` each run. Its `weekly_summary_lines()` feeds the Monday weekly_health.py Telegram. See Shadow Bracket Tracker section.
 - `scripts/auto_logger.py` — Logs paper trades
 - `scripts/trade_ledger.py` — **Added October 6 (commit 4b8e861).** Read-only. Rebuilds `logs/trade_ledger.csv` from scratch from Alpaca's filled SPY orders on every run (one row per real round-trip trade: entry/exit time and price, order IDs, exit reason, P&L, days held, plus any OPEN position). Wired into run_pipeline.sh after outcome_tracker.py. `logs/trade_ledger.csv` is the source of truth for the real paper trading record and the 30-trade count.
@@ -357,6 +359,26 @@ Source of truth: `logs/trade_ledger.csv` (rebuilt from Alpaca filled orders by s
 - **NaN bar fix (October 12, same commit):** yfinance returned today's bar with close=NaN at 5pm PT, which put `nan` into open-leg PnL and the weekly summary. A NaN high/low would also silently miss a leg hit. Bars with any NaN OHLC field are now dropped until complete. A signal whose entry bar is dropped shows PENDING_ENTRY.
 - **No live trading change.**
 
+## Regime Filter — OBSERVE-ONLY, AWAITING REVIEW (October 13)
+- **Spec (Peter):** TRENDING when MA50 > MA200 AND 20-day return volatility < threshold, else CHOPPY. TRENDING trades normally, CHOPPY skips the entry. No live setting changes until the backtest is reviewed.
+- **Decided (October 13):** threshold to be picked from the full signal backtest, not the 7 live trades. Efficiency ratio included as a backtest comparison only. When enforced, the skip goes in **trade_logic.py**, not signal_logger.py (analysts and Critic still see every signal, the regime blocks execution only), with a new `BLOCKED_REGIME` code in decision_ledger.py. **Not built yet.**
+- **Built:** `scripts/regime_filter.py` (`vol20_series()`, `efficiency_ratio_series()`, `classify_values()`, `classify(df)`; vol20 = std of the last 20 daily close-to-close returns, in daily %). signal_logger.py calls `classify()` on its own dataframe right after `compute_indicators()`, appends to `logs/regime_log.csv` (append-only, header-mismatch refusal like decision_ledger), and prints the regime. Wrapped in try/except: a regime failure prints a WARNING and the signal still logs (tested). signal_log.csv schema unchanged. telegram_notify.py appends `Regime: ... [observe-only]` to the SPY daily summary only (QQQ unchanged), reading today's regime_log.csv row, "unavailable" if missing.
+- **Backtest (`scripts/backtest_regime.py`, run October 13):** imports backtest.py (signals, bracket sim, metrics) and regime_filter.py helpers, so live and backtest compute vol identically. 342 signals since late 2023, live 2.5%/4% bracket, $1,000 notional. Regime inputs are trailing values at each signal's close. Thresholds are absolute values, no percentile lookahead. Swept vol 0.55-1.25% and efficiency ratio 0.10-0.35, for all signals, longs only and shorts only.
+
+  | Signals | Filter | Kept | Win% | PnL | PF | Max DD | Skipped trades made |
+  |---|---|---|---|---|---|---|---|
+  | All | none | 342 | 42.6% | $1,100.54 | 1.23 | $1,378.61 | — |
+  | All | spec @ 0.77% | 191 | 47.2% | $1,154.47 | 1.49 | $1,089.67 | −$53.94 |
+  | All | spec @ 0.65% | 98 | 50.5% | $826.87 | 1.72 | $474.67 | +$273.66 |
+  | Longs | none | 236 | 52.0% | $2,185.82 | 1.82 | $1,245.00 | — |
+  | Longs | spec @ 0.77% | 153 | 53.9% | $1,579.76 | 1.97 | $823.64 | +$606.06 |
+  | Shorts | none | 106 | 22.9% | −$1,085.29 | 0.47 | $1,085.29 | — |
+  | Shorts | spec @ 0.77% | 38 | 21.6% | −$425.29 | 0.43 | $425.29 | −$660.00 |
+
+- **Reading:** (1) MA50 > MA200 on 95% of signal days, so the spec is effectively a volatility filter. (2) On longs, skipping CHOPPY costs money at every threshold tested ($535-$1,928 of skipped long PnL). PF and drawdown improve only because fewer trades are taken. (3) On shorts, the filter "helps" only because shorts lose in every regime. (4) The combined-set improvement is mostly the filter dropping shorts. The biggest finding is not the regime: **shorts lost $1,085 over 106 trades (PF 0.47) while longs made $2,186 (PF 1.82)**. Caveat: 2023-2026 is a bull market, so a long bias is expected and may not hold in a downtrend. (5) Efficiency ratio filter is no better.
+- **Real Alpaca trades at the 0.77% placeholder:** avoids trades 1 (−$20.62) and 2 (−$14.36), keeps trade 3 (−$15.51), skips the only win (trade 4, +$6.93), keeps both September losses. 3 of the 5 stop-loss losses were shorts.
+- **Next:** Peter reviews. Do not enable any skip without a decision. Candidates worth testing next, backtest only: long-only, or shorts only when MA50 < MA200.
+
 ## Telegram Notifications — COMPLETED (June 20)
 - **Bot:** @Peters_Open_Claw_Bot (same bot OpenClaw/Andy uses). No new bot needed.
 - **Script:** `scripts/telegram_notify.py` — reads botToken from `/mnt/c/Users/openc/.openclaw/openclaw.json` (channels.telegram.botToken), reads Peter's personal chat ID from `.env` (TELEGRAM_CHAT_ID = 8344685831).
@@ -540,6 +562,10 @@ cd ~/trading-system && python3 scripts/trade_logic.py
 
 # Append a decision ledger row for the latest signal manually (read-only, but DOES append a real row -- avoid test runs against the live ledger)
 cd ~/trading-system && python3 scripts/decision_ledger.py
+
+# Check today's regime (observe-only) and run the regime backtest
+cd ~/trading-system && python3 scripts/regime_filter.py
+cd ~/trading-system && python3 scripts/backtest_regime.py
 
 # Rebuild the shadow bracket CSV (read-only, safe to rerun)
 cd ~/trading-system && python3 scripts/shadow_brackets.py

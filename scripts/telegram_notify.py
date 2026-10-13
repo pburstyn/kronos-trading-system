@@ -170,6 +170,13 @@ def send_daily_summary(dry_run):
         return
 
     message = build_daily_summary_message(row)
+    # SPY only. Observe-only regime from regime_filter.py (October 13), its own
+    # try/except so a regime problem can never block the daily summary.
+    try:
+        from regime_filter import get_today_regime, format_regime_line
+        message += "\n" + format_regime_line(get_today_regime("SPY"))
+    except Exception as e:
+        print(f"  WARNING: regime line unavailable ({e})")
     send_message(message, dry_run, "Daily summary")
 
 
