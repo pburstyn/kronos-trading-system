@@ -55,7 +55,8 @@
 - `logs/intraday_price_log.csv` — SPY price sampled every 15 min during market hours (standalone, not pipeline)
 - `logs/alpaca_orders.csv` — Submitted Alpaca paper orders (order ID, direction, notional, stop/take-profit levels)
 - `logs/andy_status.json` — Last known Andy health status (UP/DOWN) and timestamp; used by andy_health.py to suppress duplicate alerts
-- `logs/andy_health.log` — Andy health check log (appended by cron every 30 min)
+- `logs/andy_health.log` — Andy health check log, one line per run written by andy_health.py's log() (cron every 30 min)
+- `logs/andy_health_cron.log` — **Added October 13.** Cron's captured stdout/stderr for andy_health.py, including any traceback. Check here if the script crashes outright.
 - `logs/morning_check.log` — Morning trade check log (appended by cron at 7 AM PT weekdays)
 - `logs/outcome_tracker.log` — Standalone outcome tracker log (appended by cron at 1:05 PM PT weekdays, right after market close)
 - `logs/tech_watch.log` — Standalone tech watch log (appended by cron Mondays at 7:05 AM PT)
@@ -390,10 +391,11 @@ Source of truth: `logs/trade_ledger.csv` (rebuilt from Alpaca filled orders by s
 - **Alert logic:** Sends Telegram alert only on status change — DOWN alert when UP→DOWN, recovery alert when DOWN→UP. Silent on repeated same status (no alert spam every 30 min).
 - **First-run fix:** On first run (no status file), `last_status=None`. Only the DOWN alert fires if Andy is down; the "back UP" message is guarded by `elif last_status == "DOWN"` so it never fires falsely when there's no prior state.
 - **State file:** `logs/andy_status.json` — stores `{"status": "UP"/"DOWN", "last_checked": "..."}`. Persists across cron runs.
-- **Cron:** `*/30 * * * *` — every 30 minutes, all hours, all days (no market-hours restriction; Andy should be up whenever you want to trade). Full absolute path with venv python, stderr+stdout → `logs/andy_health.log`.
+- **Cron:** `*/30 * * * *` — every 30 minutes, all hours, all days (no market-hours restriction; Andy should be up whenever you want to trade). Full absolute path with venv python, stderr+stdout → `logs/andy_health_cron.log` (changed October 13, was `logs/andy_health.log`). log() already appends every line to andy_health.log and also prints it, so the old redirect into the same file wrote every line twice. Old crontab backed up at `~/trading-system/crontab.bak` (untracked).
 - **Telegram config:** Same pattern as telegram_notify.py — botToken from openclaw.json, TELEGRAM_CHAT_ID from .env.
 - **DOWN alert message:** `"ALERT: Andy (OpenClaw) is DOWN as of {now}.\nStart gateway.cmd in PowerShell to bring him back up."`
 - **Tested:** First run with no prior status file → correctly sent DOWN alert (Andy genuinely down). Second run → no duplicate alert. Fix verified.
+- **False DOWN under cron — FIXED (October 13, commit b4e8bab):** `check_andy()` called `powershell.exe` by name. Cron's PATH (/usr/bin:/bin) has no /mnt/c entries, so subprocess raised `FileNotFoundError`, the bare `except` swallowed it, and Andy was reported DOWN while actually UP (e.g. a manual 08:23 run said UP, the 08:30 cron run said DOWN). Fix: full path `/mnt/c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe`, timeout raised 15s → 30s, and the except block now logs `WARNING: Andy check failed: <error>` instead of failing silently. Tested under `env -i` with cron's bare PATH: old call failed with the exact error, new call returned UP in ~2s. `scripts/startup_check.py` imports `check_andy` from andy_health.py, so it gets the fix too.
 
 ## Andy Auto-Restart (Windows Task Scheduler) — COMPLETED (June 25)
 - **Problem:** OpenClaw had an existing "OpenClaw Gateway" task (installed by OpenClaw itself) but with `RestartCount: 0` (no restart on crash) and a 72-hour execution time limit that would kill Andy every 3 days.
