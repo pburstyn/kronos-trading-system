@@ -272,6 +272,70 @@ def weekly_summary_lines(lookback_days=7):
         c_pnl, _ = stats(open_pairs, 1)
         lines.append(f"  Not yet resolved under both: {len(open_pairs)} "
                      f"(old ${o_pnl:+.2f}, current ${c_pnl:+.2f}, open legs marked to last close)")
+    return lines + [""] + council_summary_lines(rows)
+
+
+def council_bucket(action):
+    """Collapse real_trade_action to ENTER / VETO / BLOCKED / SKIP / NO_LEDGER_ROW.
+    Pre-October 12 ledger rows carry a bare BLOCKED, later ones BLOCKED_<code>."""
+    if not action:
+        return "NO_LEDGER_ROW"
+    if action.startswith("BLOCKED"):
+        return "BLOCKED"
+    return action
+
+
+def council_summary_lines(rows):
+    """Raw technical signal vs full council, both on the CURRENT bracket (the one
+    live orders use). Raw = enter every signal with raw_signal_action ENTER.
+    Council = enter only where real_trade_action is ENTER, $0 elsewhere. Matched
+    = signals whose CURRENT leg has closed, so both sides cover the same signals.
+    Both sides are shadow simulations, so council PnL here is not the real
+    Alpaca fill (that lives in trade_ledger.csv)."""
+    cur_name = BRACKETS[1][0]
+    cur = [r for r in rows if r["bracket"] == cur_name]
+    raw_enter = sum(1 for r in cur if r.get("raw_signal_action") == "ENTER")
+
+    counts, blocked_codes = {}, {}
+    for r in cur:
+        bucket = council_bucket(r.get("real_trade_action", ""))
+        counts[bucket] = counts.get(bucket, 0) + 1
+        if bucket == "BLOCKED":
+            code = r["real_trade_action"]
+            if code == "BLOCKED":
+                code = "BLOCKED (pre-Oct 12, no code)"
+            blocked_codes[code] = blocked_codes.get(code, 0) + 1
+
+    lines = ["Raw signal vs council (current 2.5%/4% bracket, per share):",
+             f"  Signals tracked: {len(cur)}",
+             f"  Raw signal would enter: {raw_enter}"]
+    order = ["ENTER", "VETO", "BLOCKED", "SKIP", "NO_LEDGER_ROW"]
+    parts = [f"{b.lower().replace('_', ' ')} {counts[b]}" for b in order if counts.get(b)]
+    lines.append("  Council: " + ", ".join(parts))
+    if blocked_codes:
+        detail = ", ".join(f"{c} {n}" for c, n in sorted(blocked_codes.items()))
+        lines.append(f"    Blocked by reason: {detail}")
+
+    closed = [r for r in cur if r["status"] in ("STOP_LOSS", "TAKE_PROFIT")]
+    if not closed:
+        lines.append("  Matched closed signals: 0 (no signal has closed under the current bracket yet)")
+        return lines
+
+    def pnl(subset):
+        return sum(float(r["pnl_per_share"]) for r in subset)
+
+    raw_taken = [r for r in closed if r.get("raw_signal_action") == "ENTER"]
+    council_taken = [r for r in closed if council_bucket(r.get("real_trade_action", "")) == "ENTER"]
+    raw_pnl, council_pnl = pnl(raw_taken), pnl(council_taken)
+    lines.append(f"  Matched closed signals: {len(closed)}")
+    lines.append(f"  Raw signal: ${raw_pnl:+.2f} on {len(raw_taken)} trade(s)")
+    lines.append(f"  Council:    ${council_pnl:+.2f} on {len(council_taken)} trade(s)")
+    lines.append(f"  Council minus raw: ${council_pnl - raw_pnl:+.2f}")
+    # What each filter removed. Negative = the filter skipped losers and helped.
+    for bucket in ("VETO", "BLOCKED"):
+        skipped = [r for r in raw_taken if council_bucket(r.get("real_trade_action", "")) == bucket]
+        if skipped:
+            lines.append(f"    {bucket.title()} signals would have made ${pnl(skipped):+.2f} on {len(skipped)}")
     return lines
 
 
