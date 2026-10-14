@@ -6,6 +6,12 @@ STOP_LOSS_PCT = 0.025
 TAKE_PROFIT_PCT_LOW = 0.04
 TAKE_PROFIT_PCT_HIGH = 0.05
 MIN_CONFIDENCE_FOR_ENTRY = 51.0
+# Long-only rule (October 13). OFF by default: no live behavior change until
+# Peter flips it to True. When True, every DOWN signal returns NO_TRADE with
+# block_code BLOCKED_SHORT, which decision_ledger.py logs as BLOCKED_SHORT.
+# Basis: backtest_regime.py, shorts lost $1,085 over 106 trades (PF 0.47)
+# 2023-2026, long-only PF 1.82 vs 1.23 baseline. Bull-market sample only.
+LONG_ONLY_MODE = False
 
 def extract_verdict(row):
     """Return clean PASS/FLAG/VETO from a decisions_log row.
@@ -54,6 +60,12 @@ def make_trade_decision(direction, confidence_pct, last_close, verdict):
 
     if direction not in ("UP", "DOWN"):
         return {"action": "NO_TRADE", "reason": "Signal not directional"}
+
+    # action stays NO_TRADE so every caller's existing `!= "ENTER"` check
+    # handles it unchanged. block_code is only read by decision_ledger.py.
+    if LONG_ONLY_MODE and direction == "DOWN":
+        return {"action": "NO_TRADE", "block_code": "BLOCKED_SHORT",
+                "reason": "Long-only mode: DOWN signal blocked (LONG_ONLY_MODE=True in trade_logic.py)"}
 
     if confidence_pct < MIN_CONFIDENCE_FOR_ENTRY:
         return {"action": "NO_TRADE", "reason": f"Confidence {confidence_pct}% below minimum {MIN_CONFIDENCE_FOR_ENTRY}%"}

@@ -53,9 +53,12 @@ COLUMNS = [
 #   BLOCKED_EXISTING_POSITION  -- position guard found an open SPY position or
 #                                 open SPY order
 #   BLOCKED_API_ERROR          -- position guard hit an API error and failed closed
+#   BLOCKED_SHORT              -- DOWN signal blocked by trade_logic.py's
+#                                 LONG_ONLY_MODE (October 13, OFF by default)
 TRADE_ACTIONS = (
     "ENTER", "SKIP", "VETO",
     "BLOCKED_NEUTRAL", "BLOCKED_STALE_DATA", "BLOCKED_EXISTING_POSITION", "BLOCKED_API_ERROR",
+    "BLOCKED_SHORT",
 )
 
 MODEL_RE = re.compile(r"""["']?model["']?\s*[:=]\s*["']([^"']+)["']""")
@@ -167,6 +170,8 @@ def determine_action(signal, decision_row, latest_decision_row):
         decision_row["last_close"],
         verdict,
     )
+    if decision.get("block_code") == "BLOCKED_SHORT":
+        return "BLOCKED_SHORT", decision["reason"]
     if decision["action"] != "ENTER":
         return "SKIP", decision["reason"]
 

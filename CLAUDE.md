@@ -157,6 +157,7 @@
 - Short entry: Daily close below key support with MACD bearish + RSI bearish
 - Hard confidence floor: 51% minimum for any directional entry (checked independently of verdict). Dead code under current wiring — see Confidence Floor: Lowered to 50%, Reverted to 70% section (briefly not dead code September 26 2026 while the floor was at 50%).
 - Position sizing: VETO blocks entirely, FLAG = 0.5x size, PASS = 1x size
+- **Long-only switch (October 13):** `LONG_ONLY_MODE = False` in trade_logic.py. **OFF. Flip to True to block all shorts.** See Long-Only Switch section.
 - Stop-loss: 2.5% from entry (above for shorts, below for longs). **Widened from 2% on September 26 2026** — see Bracket Stop/Take-Profit Widened section.
 - Take-profit: 4-5% from entry. **Low end widened from 3% to 4% on September 26 2026**, same change.
 - **Stale-data protection added (commit aea8077):** checks latest decisions_log.csv timestamp matches today's date before acting; if signal is NEUTRAL or stale, reports NO TRADE instead of silently re-acting on an old decision
@@ -342,6 +343,7 @@ Source of truth: `logs/trade_ledger.csv` (rebuilt from Alpaca filled orders by s
   - `BLOCKED_API_ERROR`: position guard hit an API error and failed closed (any `could not verify ...` reason from `check_existing_exposure()`, or the guard itself raising)
   - `BLOCKED_NEUTRAL`: signal was NEUTRAL (previously logged as SKIP)
   - Unchanged: `ENTER`, `VETO`, `SKIP` (WEAK signal, no Critic row, trade_logic NO_TRADE)
+  - `BLOCKED_SHORT` (added October 13): DOWN signal blocked by trade_logic.py's `LONG_ONLY_MODE`. Never appears while the switch is OFF.
 - **Schema:** column set unchanged, so `append_row()`'s header check still passes and no file rewrite was needed. Only the allowed `trade_action` values changed (`TRADE_ACTIONS` tuple in the script). Rows before October 12 keep bare `BLOCKED` (always a position-guard block) and NEUTRAL-as-SKIP. Not backfilled, the ledger is append-only.
 - **No live trading change.** alpaca_execute.py, trade_logic.py and the guard itself are untouched. Only the ledger's labelling changed.
 
@@ -387,6 +389,13 @@ Source of truth: `logs/trade_ledger.csv` (rebuilt from Alpaca filled orders by s
 
   The conditional variant is untestable on this data: MA50 < MA200 on only 49 of 748 days (2025-04-16 to 2025-06-26), 4 shorts fired in that window (April 16-23 2025), all stopped out at −$25. Caveats: one bull market only, so long-only has no tested defense in a downtrend. The backtest lets positions overlap (live holds one at a time), so absolute PnL is overstated for every row. Compare rows, not dollar totals. Max DD is identical because the worst stretch is losing longs.
 - **Next:** Peter reviews. Do not enable any regime skip without a decision.
+
+## Long-Only Switch — BUILT, OFF (October 13)
+- **Switch:** `LONG_ONLY_MODE = False` at the top of `scripts/trade_logic.py`. Default OFF, so live behavior is unchanged. To enable: set it to `True`, commit, push. Takes effect on the next pipeline run.
+- **When ON:** `make_trade_decision()` returns `{"action": "NO_TRADE", "block_code": "BLOCKED_SHORT", "reason": ...}` for every DOWN signal, checked right after the directional check. `action` stays `NO_TRADE` on purpose so alpaca_execute.py, telegram_notify.py and decision_ledger.py, which all treat anything but ENTER as no trade, need no change and can't hit an unknown action. decision_ledger.py reads `block_code` and logs `BLOCKED_SHORT`. A vetoed short still logs as VETO, since the ledger checks the verdict first. Longs are untouched.
+- **Basis:** backtest_regime.py direction variants (see Regime Filter section). Long-only 236 trades, $2,185.82, PF 1.82, max DD $1,245 vs baseline 342 trades, $1,100.54, PF 1.23, max DD $1,378.61. Bull-market sample only (2023-10 to 2026-10). Long-only has no tested defense in a downtrend.
+- **Tested (October 13):** OFF, 48 input combos (UP/DOWN/NEUTRAL/WEAK x 40/70/90% x PASS/FLAG/VETO/blank) return identical decisions to the previous committed trade_logic.py. ON, exactly the 12 DOWN combos change, no UP combo changes. Ledger with a mocked guard: ON DOWN PASS → BLOCKED_SHORT, ON DOWN VETO → VETO, ON UP PASS → ENTER, OFF DOWN PASS → ENTER.
+- **Not covered by the switch:** (1) `scripts/auto_logger.py` has its own entry logic and doesn't call `make_trade_decision()`, so with the switch ON the simulated paper_trades.csv still logs shorts. Real orders are blocked. paper_trades.csv is simulation only. (2) The switch doesn't close an already-open short. It only blocks new ones. (3) shadow_brackets.py still tracks shorts, and its `real_trade_action` column will show BLOCKED_SHORT for them, so blocked shorts keep a shadow outcome.
 
 ## Telegram Notifications — COMPLETED (June 20)
 - **Bot:** @Peters_Open_Claw_Bot (same bot OpenClaw/Andy uses). No new bot needed.
