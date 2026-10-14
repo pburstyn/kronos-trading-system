@@ -61,8 +61,13 @@ def dollars(trade):
 
 def evaluate(variant, threshold, pairs, is_trending, signals="ALL"):
     """pairs = [(signal_row, trade)]. is_trending(row) -> bool."""
-    kept = [t for row, t in pairs if is_trending(row)]
-    skipped = [t for row, t in pairs if not is_trending(row)]
+    return evaluate_trades(variant, threshold, pairs, lambda row, t: is_trending(row), signals)
+
+
+def evaluate_trades(variant, threshold, pairs, keep, signals="ALL"):
+    """Like evaluate(), but keep(row, trade) can also look at the trade's direction."""
+    kept = [t for row, t in pairs if keep(row, t)]
+    skipped = [t for row, t in pairs if not keep(row, t)]
     m = bt.compute_trade_metrics(kept)
     shorts = [t for t in skipped if t["direction"] == "DOWN"]
     return {
@@ -97,6 +102,18 @@ def run_sweeps(pairs, signals="ALL"):
     return rows
 
 
+def direction_variants(pairs):
+    """Direction rules (October 13, follow-on to the regime sweep). Longs are
+    always kept. long_only drops every short. shorts_only_in_bear_trend keeps a
+    short only when MA50 < MA200 on the signal day."""
+    return [
+        evaluate_trades("baseline_no_filter", "", pairs, lambda r, t: True, "DIRECTION"),
+        evaluate_trades("long_only", "", pairs, lambda r, t: t["direction"] == "UP", "DIRECTION"),
+        evaluate_trades("shorts_only_in_bear_trend", "MA50<MA200", pairs,
+                        lambda r, t: t["direction"] == "UP" or r["ma50"] < r["ma200"], "DIRECTION"),
+    ]
+
+
 def run_all_sweeps(pairs):
     """Combined, then longs and shorts separately. Shorts lose in every regime
     over 2023-2026, so on the combined set any filter that drops shorts looks
@@ -104,7 +121,7 @@ def run_all_sweeps(pairs):
     rows = run_sweeps(pairs, "ALL")
     for d in ("UP", "DOWN"):
         rows += run_sweeps([p for p in pairs if p[1]["direction"] == d], d)
-    return rows
+    return rows + direction_variants(pairs)
 
 
 def direction_split(pairs):
@@ -137,7 +154,7 @@ def real_trades(df):
 
 
 def print_report(rows, split, reals, n_signals):
-    for label in ("ALL", "UP", "DOWN"):
+    for label in ("ALL", "UP", "DOWN", "DIRECTION"):
         print_table([r for r in rows if r["signals"] == label], label, n_signals)
     print("  SkipPnL$ = what the skipped trades made. Negative = the filter avoided net losses.")
     print_rest(split, reals)

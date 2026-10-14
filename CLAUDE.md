@@ -377,7 +377,16 @@ Source of truth: `logs/trade_ledger.csv` (rebuilt from Alpaca filled orders by s
 
 - **Reading:** (1) MA50 > MA200 on 95% of signal days, so the spec is effectively a volatility filter. (2) On longs, skipping CHOPPY costs money at every threshold tested ($535-$1,928 of skipped long PnL). PF and drawdown improve only because fewer trades are taken. (3) On shorts, the filter "helps" only because shorts lose in every regime. (4) The combined-set improvement is mostly the filter dropping shorts. The biggest finding is not the regime: **shorts lost $1,085 over 106 trades (PF 0.47) while longs made $2,186 (PF 1.82)**. Caveat: 2023-2026 is a bull market, so a long bias is expected and may not hold in a downtrend. (5) Efficiency ratio filter is no better.
 - **Real Alpaca trades at the 0.77% placeholder:** avoids trades 1 (−$20.62) and 2 (−$14.36), keeps trade 3 (−$15.51), skips the only win (trade 4, +$6.93), keeps both September losses. 3 of the 5 stop-loss losses were shorts.
-- **Next:** Peter reviews. Do not enable any skip without a decision. Candidates worth testing next, backtest only: long-only, or shorts only when MA50 < MA200.
+- **Direction variants (October 13, follow-on):** `direction_variants()` in backtest_regime.py, rows labelled `DIRECTION` in backtest_regime.csv. Longs always kept.
+
+  | Variant | Trades | PnL | PF | Max DD |
+  |---|---|---|---|---|
+  | Baseline, all signals | 342 | $1,100.54 | 1.23 | $1,378.61 |
+  | Long only | 236 | $2,185.82 | 1.82 | $1,245.00 |
+  | Shorts only when MA50 < MA200 | 240 | $2,085.82 | 1.76 | $1,245.00 |
+
+  The conditional variant is untestable on this data: MA50 < MA200 on only 49 of 748 days (2025-04-16 to 2025-06-26), 4 shorts fired in that window (April 16-23 2025), all stopped out at −$25. Caveats: one bull market only, so long-only has no tested defense in a downtrend. The backtest lets positions overlap (live holds one at a time), so absolute PnL is overstated for every row. Compare rows, not dollar totals. Max DD is identical because the worst stretch is losing longs.
+- **Next:** Peter reviews. Do not enable any regime skip without a decision.
 
 ## Telegram Notifications — COMPLETED (June 20)
 - **Bot:** @Peters_Open_Claw_Bot (same bot OpenClaw/Andy uses). No new bot needed.
