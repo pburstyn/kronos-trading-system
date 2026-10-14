@@ -396,6 +396,7 @@ Source of truth: `logs/trade_ledger.csv` (rebuilt from Alpaca filled orders by s
 - **Basis:** backtest_regime.py direction variants (see Regime Filter section). Long-only 236 trades, $2,185.82, PF 1.82, max DD $1,245 vs baseline 342 trades, $1,100.54, PF 1.23, max DD $1,378.61. Bull-market sample only (2023-10 to 2026-10). Long-only has no tested defense in a downtrend.
 - **Tested (October 13):** OFF, 48 input combos (UP/DOWN/NEUTRAL/WEAK x 40/70/90% x PASS/FLAG/VETO/blank) return identical decisions to the previous committed trade_logic.py. ON, exactly the 12 DOWN combos change, no UP combo changes. Ledger with a mocked guard: ON DOWN PASS → BLOCKED_SHORT, ON DOWN VETO → VETO, ON UP PASS → ENTER, OFF DOWN PASS → ENTER.
 - **Not covered by the switch:** (1) `scripts/auto_logger.py` has its own entry logic and doesn't call `make_trade_decision()`, so with the switch ON the simulated paper_trades.csv still logs shorts. Real orders are blocked. paper_trades.csv is simulation only. (2) The switch doesn't close an already-open short. It only blocks new ones. (3) shadow_brackets.py still tracks shorts, and its `real_trade_action` column will show BLOCKED_SHORT for them, so blocked shorts keep a shadow outcome.
+- Stays OFF until all three: (1) long-only compared against buy-and-hold SPY over the same period on profit factor and max drawdown, (2) Julius and Fable review the result, (3) Peter decides. Decided October 13.
 
 ## Telegram Notifications — COMPLETED (June 20)
 - **Bot:** @Peters_Open_Claw_Bot (same bot OpenClaw/Andy uses). No new bot needed.
