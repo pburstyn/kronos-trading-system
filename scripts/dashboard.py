@@ -12,10 +12,10 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from trade_logic import STOP_LOSS_PCT, TAKE_PROFIT_PCT_LOW
 
 DECISIONS_LOG = os.path.expanduser(
-    "~/trading-system/logs/decisions_log.csv"
+    "~/kronos-trading-system/logs/decisions_log.csv"
 )
 DASHBOARD_FILE = os.path.expanduser(
-    "~/trading-system/logs/dashboard.html"
+    "~/kronos-trading-system/logs/dashboard.html"
 )
 
 def load_decisions():

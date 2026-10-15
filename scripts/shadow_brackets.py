@@ -31,7 +31,7 @@ from trade_logic import STOP_LOSS_PCT, TAKE_PROFIT_PCT_LOW
 # and daily bars on every run (written via a temp file + os.replace), so a row
 # moves OPEN -> STOP_LOSS / TAKE_PROFIT as the price path resolves.
 
-REPO_DIR = os.path.expanduser("~/trading-system")
+REPO_DIR = os.path.expanduser("~/kronos-trading-system")
 LOGS_DIR = os.path.join(REPO_DIR, "logs")
 SIGNAL_LOG = os.path.join(LOGS_DIR, "signal_log.csv")
 LEDGER = os.path.join(LOGS_DIR, "decision_ledger.csv")

@@ -5,7 +5,7 @@ from datetime import datetime, timedelta, timezone
 import requests
 from dotenv import load_dotenv
 
-load_dotenv(os.path.expanduser("~/trading-system/.env"))
+load_dotenv(os.path.expanduser("~/kronos-trading-system/.env"))
 
 from alpaca.trading.client import TradingClient
 from alpaca.trading.requests import GetOrdersRequest

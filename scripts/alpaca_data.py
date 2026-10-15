@@ -5,7 +5,7 @@ from alpaca.trading.client import TradingClient
 from alpaca.data.historical import StockHistoricalDataClient
 from alpaca.data.requests import StockLatestQuoteRequest
 
-load_dotenv(os.path.expanduser("~/trading-system/.env"))
+load_dotenv(os.path.expanduser("~/kronos-trading-system/.env"))
 
 API_KEY = os.environ.get("ALPACA_API_KEY")
 SECRET_KEY = os.environ.get("ALPACA_SECRET_KEY")

@@ -5,11 +5,11 @@ import re
 from datetime import datetime
 from dotenv import load_dotenv
 
-load_dotenv(os.path.expanduser("~/trading-system/.env"))
+load_dotenv(os.path.expanduser("~/kronos-trading-system/.env"))
 
-REASONING_LOG = os.path.expanduser("~/trading-system/logs/reasoning_log.csv")
-KIMI_K3_REASONING_LOG = os.path.expanduser("~/trading-system/logs/kimi_k3_reasoning_log.csv")
-DECISIONS_LOG = os.path.expanduser("~/trading-system/logs/decisions_log.csv")
+REASONING_LOG = os.path.expanduser("~/kronos-trading-system/logs/reasoning_log.csv")
+KIMI_K3_REASONING_LOG = os.path.expanduser("~/kronos-trading-system/logs/kimi_k3_reasoning_log.csv")
+DECISIONS_LOG = os.path.expanduser("~/kronos-trading-system/logs/decisions_log.csv")
 
 today = datetime.now().strftime("%A, %B %d, %Y, %I:%M %p")
 CRITIC_SYSTEM_PROMPT = (
@@ -116,7 +116,7 @@ def log_decision(row, verdict, reason, confidence):
     print("  " + reason)
     print("Logged to: " + DECISIONS_LOG + "\n")
 
-SIGNAL_LOG = os.path.expanduser("~/trading-system/logs/signal_log.csv")
+SIGNAL_LOG = os.path.expanduser("~/kronos-trading-system/logs/signal_log.csv")
 
 def get_latest_signal_direction():
     if not os.path.isfile(SIGNAL_LOG):

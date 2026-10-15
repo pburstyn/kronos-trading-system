@@ -16,7 +16,7 @@ from news_context import get_news_context
 # read-only alpaca_execute.check_existing_exposure() position guard. This script
 # never submits, modifies, or cancels orders.
 
-REPO_DIR = os.path.expanduser("~/trading-system")
+REPO_DIR = os.path.expanduser("~/kronos-trading-system")
 SCRIPTS_DIR = os.path.join(REPO_DIR, "scripts")
 LOGS_DIR = os.path.join(REPO_DIR, "logs")
 

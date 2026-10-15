@@ -7,7 +7,7 @@ import json
 import sys
 from datetime import datetime
 
-AUDIT_LOG = "/home/pburstyn/trading-system/logs/claude_code_audit.log"
+AUDIT_LOG = "/home/pburstyn/kronos-trading-system/logs/claude_code_audit.log"
 
 
 def main():

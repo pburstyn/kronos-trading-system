@@ -4,7 +4,7 @@ import sys
 from datetime import datetime
 from dotenv import load_dotenv
 
-load_dotenv(os.path.expanduser("~/trading-system/.env"))
+load_dotenv(os.path.expanduser("~/kronos-trading-system/.env"))
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 # STOP_LOSS_PCT/TAKE_PROFIT_PCT_LOW/TAKE_PROFIT_PCT_HIGH imported rather than
@@ -22,9 +22,9 @@ from trade_logic import (
     TAKE_PROFIT_PCT_HIGH,
 )
 
-DECISIONS_LOG = os.path.expanduser("~/trading-system/logs/decisions_log.csv")
-PAPER_TRADES_LOG = os.path.expanduser("~/trading-system/logs/paper_trades.csv")
-SIGNAL_LOG_PATH = os.path.expanduser("~/trading-system/logs/signal_log.csv")
+DECISIONS_LOG = os.path.expanduser("~/kronos-trading-system/logs/decisions_log.csv")
+PAPER_TRADES_LOG = os.path.expanduser("~/kronos-trading-system/logs/paper_trades.csv")
+SIGNAL_LOG_PATH = os.path.expanduser("~/kronos-trading-system/logs/signal_log.csv")
 
 def calculate_levels(direction, entry_price):
     entry = float(entry_price)

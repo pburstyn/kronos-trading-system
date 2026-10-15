@@ -3,7 +3,7 @@ import os
 import yfinance as yf
 from datetime import datetime
 
-PAPER_TRADES_LOG = os.path.expanduser("~/trading-system/logs/paper_trades.csv")
+PAPER_TRADES_LOG = os.path.expanduser("~/kronos-trading-system/logs/paper_trades.csv")
 
 def get_current_price(ticker):
     df = yf.download(ticker, period="1d", interval="1d", progress=False)

@@ -3,12 +3,12 @@ import json
 from datetime import datetime, timedelta, timezone
 from dotenv import load_dotenv
 
-load_dotenv(os.path.expanduser("~/trading-system/.env"))
+load_dotenv(os.path.expanduser("~/kronos-trading-system/.env"))
 
 from alpaca.data.historical import NewsClient
 from alpaca.data.requests import NewsRequest
 
-NEWS_CACHE = os.path.expanduser("~/trading-system/logs/news_cache.json")
+NEWS_CACHE = os.path.expanduser("~/kronos-trading-system/logs/news_cache.json")
 
 SYMBOLS = "SPY,QQQ,GLD,USO,TLT"
 KEYWORDS = [

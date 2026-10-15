@@ -6,13 +6,13 @@ from datetime import datetime
 
 from dotenv import load_dotenv
 
-load_dotenv(os.path.expanduser("~/trading-system/.env"))
+load_dotenv(os.path.expanduser("~/kronos-trading-system/.env"))
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from telegram_notify import get_telegram_config, send_telegram
 from andy_health import check_andy
 
-LOG_FILE = os.path.expanduser("~/trading-system/logs/startup_check.log")
+LOG_FILE = os.path.expanduser("~/kronos-trading-system/logs/startup_check.log")
 
 # Give WSL networking a moment to come up when launched from a Windows logon trigger.
 STARTUP_DELAY_SEC = 15

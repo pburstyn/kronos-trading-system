@@ -7,11 +7,11 @@ from datetime import datetime, timedelta
 import requests
 from dotenv import load_dotenv
 
-load_dotenv(os.path.expanduser("~/trading-system/.env"))
+load_dotenv(os.path.expanduser("~/kronos-trading-system/.env"))
 
 OPENCLAW_CONFIG = "/mnt/c/Users/openc/.openclaw/openclaw.json"
-PIPELINE_LOG = os.path.expanduser("~/trading-system/logs/pipeline.log")
-DECISION_LEDGER = os.path.expanduser("~/trading-system/logs/decision_ledger.csv")
+PIPELINE_LOG = os.path.expanduser("~/kronos-trading-system/logs/pipeline.log")
+DECISION_LEDGER = os.path.expanduser("~/kronos-trading-system/logs/decision_ledger.csv")
 LOOKBACK_DAYS = 7
 
 # Marker strings unique enough to tell whether a given script ran in a day's

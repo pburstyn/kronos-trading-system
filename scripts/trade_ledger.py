@@ -12,7 +12,7 @@ from datetime import datetime, timezone
 
 from dotenv import load_dotenv
 
-load_dotenv(os.path.expanduser("~/trading-system/.env"))
+load_dotenv(os.path.expanduser("~/kronos-trading-system/.env"))
 
 from alpaca.trading.client import TradingClient
 from alpaca.trading.requests import GetOrdersRequest
@@ -20,7 +20,7 @@ from alpaca.trading.enums import QueryOrderStatus
 
 TICKER = "SPY"
 START_DATE = datetime(2026, 6, 1, tzinfo=timezone.utc)
-LEDGER_FILE = os.path.expanduser("~/trading-system/logs/trade_ledger.csv")
+LEDGER_FILE = os.path.expanduser("~/kronos-trading-system/logs/trade_ledger.csv")
 
 COLUMNS = [
     "trade_num", "status", "direction", "qty",

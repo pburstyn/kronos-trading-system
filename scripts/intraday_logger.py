@@ -4,13 +4,13 @@ from datetime import datetime
 import pytz
 from dotenv import load_dotenv
 
-load_dotenv(os.path.expanduser("~/trading-system/.env"))
+load_dotenv(os.path.expanduser("~/kronos-trading-system/.env"))
 
 from alpaca.data.historical import StockHistoricalDataClient
 from alpaca.data.requests import StockLatestTradeRequest
 
 TICKER = "SPY"
-PRICE_LOG = os.path.expanduser("~/trading-system/logs/intraday_price_log.csv")
+PRICE_LOG = os.path.expanduser("~/kronos-trading-system/logs/intraday_price_log.csv")
 ET = pytz.timezone("America/New_York")
 MARKET_OPEN = (9, 30)
 MARKET_CLOSE = (16, 0)

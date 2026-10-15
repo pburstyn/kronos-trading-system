@@ -104,7 +104,7 @@ def print_decision(decision):
 
 import csv
 
-DECISIONS_LOG = os.path.expanduser("~/trading-system/logs/decisions_log.csv")
+DECISIONS_LOG = os.path.expanduser("~/kronos-trading-system/logs/decisions_log.csv")
 
 def get_latest_decision_row():
     if not os.path.isfile(DECISIONS_LOG):

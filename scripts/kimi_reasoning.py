@@ -5,15 +5,15 @@ import sys
 from datetime import datetime
 from dotenv import load_dotenv
 
-sys.path.insert(0, os.path.expanduser("~/trading-system/scripts"))
+sys.path.insert(0, os.path.expanduser("~/kronos-trading-system/scripts"))
 from fred_data import get_macro_snapshot
 from fear_greed import get_fear_greed
 from news_context import get_news_context
 
-load_dotenv(os.path.expanduser("~/trading-system/.env"))
+load_dotenv(os.path.expanduser("~/kronos-trading-system/.env"))
 
-SIGNAL_LOG = os.path.expanduser("~/trading-system/logs/signal_log.csv")
-KIMI_REASONING_LOG = os.path.expanduser("~/trading-system/logs/kimi_reasoning_log.csv")
+SIGNAL_LOG = os.path.expanduser("~/kronos-trading-system/logs/signal_log.csv")
+KIMI_REASONING_LOG = os.path.expanduser("~/kronos-trading-system/logs/kimi_reasoning_log.csv")
 
 NIM_URL = "https://integrate.api.nvidia.com/v1/chat/completions"
 

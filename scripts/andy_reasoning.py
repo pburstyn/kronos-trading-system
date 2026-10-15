@@ -6,20 +6,20 @@ import sys
 from datetime import datetime
 from dotenv import load_dotenv
 
-sys.path.insert(0, os.path.expanduser("~/trading-system/scripts"))
+sys.path.insert(0, os.path.expanduser("~/kronos-trading-system/scripts"))
 from fred_data import get_macro_snapshot
 from fear_greed import get_fear_greed
 from news_context import get_news_context
 
 # Load API key from .env file
-load_dotenv(os.path.expanduser("~/trading-system/.env"))
+load_dotenv(os.path.expanduser("~/kronos-trading-system/.env"))
 
 # ── SETTINGS ──────────────────────────────────────
 SIGNAL_LOG   = os.path.expanduser(
-    "~/trading-system/logs/signal_log.csv"
+    "~/kronos-trading-system/logs/signal_log.csv"
 )
 REASONING_LOG = os.path.expanduser(
-    "~/trading-system/logs/reasoning_log.csv"
+    "~/kronos-trading-system/logs/reasoning_log.csv"
 )
 # ──────────────────────────────────────────────────
 

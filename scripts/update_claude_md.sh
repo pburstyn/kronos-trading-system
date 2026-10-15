@@ -1,5 +1,5 @@
 #!/bin/bash
-cd /home/pburstyn/trading-system
+cd /home/pburstyn/kronos-trading-system
 LAST_SIGNAL=$(tail -1 logs/signal_log.csv)
 sed -i '/^## Last Updated/,$d' CLAUDE.md
 echo "## Last Updated" >> CLAUDE.md

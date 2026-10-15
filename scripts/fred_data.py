@@ -2,7 +2,7 @@ import os
 import requests
 from dotenv import load_dotenv
 
-load_dotenv(os.path.expanduser("~/trading-system/.env"))
+load_dotenv(os.path.expanduser("~/kronos-trading-system/.env"))
 
 API_KEY = os.environ.get("FRED_API_KEY")
 BASE_URL = "https://api.stlouisfed.org/fred/series/observations"

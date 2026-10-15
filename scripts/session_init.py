@@ -10,11 +10,11 @@ import requests
 # the working tree. Falls back to the local file (clearly labeled) if the
 # fetch fails, rather than dropping CLAUDE.md from the briefing entirely.
 CLAUDE_MD_URL = "https://raw.githubusercontent.com/pburstyn/kronos-trading-system/main/CLAUDE.md"
-LOCAL_CLAUDE_MD = os.path.expanduser("~/trading-system/CLAUDE.md")
+LOCAL_CLAUDE_MD = os.path.expanduser("~/kronos-trading-system/CLAUDE.md")
 
-SIGNAL_LOG = os.path.expanduser("~/trading-system/logs/signal_log.csv")
-QQQ_SIGNAL_LOG = os.path.expanduser("~/trading-system/logs/signal_log_qqq.csv")
-ALPACA_ORDERS_LOG = os.path.expanduser("~/trading-system/logs/alpaca_orders.csv")
+SIGNAL_LOG = os.path.expanduser("~/kronos-trading-system/logs/signal_log.csv")
+QQQ_SIGNAL_LOG = os.path.expanduser("~/kronos-trading-system/logs/signal_log_qqq.csv")
+ALPACA_ORDERS_LOG = os.path.expanduser("~/kronos-trading-system/logs/alpaca_orders.csv")
 
 
 def fetch_claude_md():

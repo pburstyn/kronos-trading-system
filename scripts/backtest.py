@@ -8,8 +8,8 @@ from datetime import datetime
 TICKER = "SPY"
 MIN_VOTES = 3
 MIN_CONFIDENCE = 70.0
-OUTPUT_FILE = os.path.expanduser("~/trading-system/logs/backtest_results.csv")
-BRACKET_GRID_OUTPUT_FILE = os.path.expanduser("~/trading-system/logs/backtest_bracket_grid.csv")
+OUTPUT_FILE = os.path.expanduser("~/kronos-trading-system/logs/backtest_results.csv")
+BRACKET_GRID_OUTPUT_FILE = os.path.expanduser("~/kronos-trading-system/logs/backtest_bracket_grid.csv")
 
 # Grid tested against the actual GTC-bracket structure alpaca_execute.py places live:
 # market entry at signal close, fixed stop-loss %, fixed take-profit %, held open
@@ -32,9 +32,9 @@ MIN_VOTES_GRID = [2, 3, 4]
 # setting" comparison this file prints silently goes stale.
 LIVE_STOP_PCT = 2.5
 LIVE_TP_PCT = 4.0
-CONFIDENCE_VOTES_GRID_OUTPUT_FILE = os.path.expanduser("~/trading-system/logs/backtest_confidence_votes_grid.csv")
+CONFIDENCE_VOTES_GRID_OUTPUT_FILE = os.path.expanduser("~/kronos-trading-system/logs/backtest_confidence_votes_grid.csv")
 
-ABLATION_OUTPUT_FILE = os.path.expanduser("~/trading-system/logs/backtest_ablation.csv")
+ABLATION_OUTPUT_FILE = os.path.expanduser("~/kronos-trading-system/logs/backtest_ablation.csv")
 ABLATION_FIELDNAMES = ["version", "description", "trades", "resolved", "win_rate_pct",
                        "total_pnl_pct", "total_pnl_dollars", "profit_factor",
                        "max_drawdown_dollars", "max_drawdown_pct"]

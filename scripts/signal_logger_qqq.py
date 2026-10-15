@@ -10,7 +10,7 @@ TICKER = "QQQ"
 LOOKBACK = 250
 MIN_VOTES = 3
 MIN_CONFIDENCE = 70.0
-LOG_FILE = os.path.expanduser("~/trading-system/logs/signal_log_qqq.csv")
+LOG_FILE = os.path.expanduser("~/kronos-trading-system/logs/signal_log_qqq.csv")
 
 def get_market_data(ticker, lookback):
     df = yf.download(ticker, period=f"{lookback}d", interval="1d", progress=False)

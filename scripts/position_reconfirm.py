@@ -10,13 +10,13 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from trade_logic import get_latest_decision_row, extract_verdict
 from telegram_notify import get_telegram_config, send_telegram
 
-load_dotenv(os.path.expanduser("~/trading-system/.env"))
+load_dotenv(os.path.expanduser("~/kronos-trading-system/.env"))
 
 from alpaca.trading.client import TradingClient
 from alpaca.trading.enums import PositionSide
 
 TICKER = "SPY"
-SIGNAL_LOG = os.path.expanduser("~/trading-system/logs/signal_log.csv")
+SIGNAL_LOG = os.path.expanduser("~/kronos-trading-system/logs/signal_log.csv")
 
 
 def get_open_position(client):

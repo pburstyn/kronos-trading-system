@@ -8,15 +8,15 @@ from datetime import datetime
 import requests
 from dotenv import load_dotenv
 
-load_dotenv(os.path.expanduser("~/trading-system/.env"))
+load_dotenv(os.path.expanduser("~/kronos-trading-system/.env"))
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from trade_logic import get_latest_decision_row, make_trade_decision, extract_verdict
 
 OPENCLAW_CONFIG = "/mnt/c/Users/openc/.openclaw/openclaw.json"
-SIGNAL_LOG = os.path.expanduser("~/trading-system/logs/signal_log.csv")
-QQQ_SIGNAL_LOG = os.path.expanduser("~/trading-system/logs/signal_log_qqq.csv")
-ALPACA_ORDERS_LOG = os.path.expanduser("~/trading-system/logs/alpaca_orders.csv")
+SIGNAL_LOG = os.path.expanduser("~/kronos-trading-system/logs/signal_log.csv")
+QQQ_SIGNAL_LOG = os.path.expanduser("~/kronos-trading-system/logs/signal_log_qqq.csv")
+ALPACA_ORDERS_LOG = os.path.expanduser("~/kronos-trading-system/logs/alpaca_orders.csv")
 
 
 def get_telegram_config():

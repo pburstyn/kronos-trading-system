@@ -7,11 +7,11 @@ from datetime import datetime
 import requests
 from dotenv import load_dotenv
 
-load_dotenv(os.path.expanduser("~/trading-system/.env"))
+load_dotenv(os.path.expanduser("~/kronos-trading-system/.env"))
 
 OPENCLAW_CONFIG = "/mnt/c/Users/openc/.openclaw/openclaw.json"
-STATUS_FILE = os.path.expanduser("~/trading-system/logs/andy_status.json")
-HEALTH_LOG = os.path.expanduser("~/trading-system/logs/andy_health.log")
+STATUS_FILE = os.path.expanduser("~/kronos-trading-system/logs/andy_status.json")
+HEALTH_LOG = os.path.expanduser("~/kronos-trading-system/logs/andy_health.log")
 
 
 def check_andy():

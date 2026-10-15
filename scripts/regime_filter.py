@@ -15,7 +15,7 @@ from datetime import datetime
 # The same helpers feed scripts/backtest_regime.py, so the backtest and the
 # live classification can't compute volatility differently.
 
-REGIME_LOG = os.path.expanduser("~/trading-system/logs/regime_log.csv")
+REGIME_LOG = os.path.expanduser("~/kronos-trading-system/logs/regime_log.csv")
 
 VOL_WINDOW = 20
 # Placeholder: median 20-day vol since 2023 (0.77% per day). Final value to be

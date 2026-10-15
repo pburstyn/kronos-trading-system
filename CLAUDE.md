@@ -551,79 +551,79 @@ Source of truth: `logs/trade_ledger.csv` (rebuilt from Alpaca filled orders by s
 ## Key Commands
 ```bash
 # Run pipeline manually
-cd ~/trading-system && bash scripts/run_pipeline.sh
+cd ~/kronos-trading-system && bash scripts/run_pipeline.sh
 
 # Copy a full session-context briefing to the clipboard (paste into a new Claude chat)
 kronos-init
 # ...or directly, without the alias:
-cd ~/trading-system && python3 scripts/session_init.py
+cd ~/kronos-trading-system && python3 scripts/session_init.py
 
 # Run signal logger only (SPY)
-cd ~/trading-system && python3 scripts/signal_logger.py
+cd ~/kronos-trading-system && python3 scripts/signal_logger.py
 
 # Run signal logger only (QQQ, signal capture only -- not acted on downstream, added September 26)
-cd ~/trading-system && python3 scripts/signal_logger_qqq.py
+cd ~/kronos-trading-system && python3 scripts/signal_logger_qqq.py
 
 # Check last QQQ signal
-tail -3 ~/trading-system/logs/signal_log_qqq.csv
+tail -3 ~/kronos-trading-system/logs/signal_log_qqq.csv
 
 # Run Kimi K3 reasoning only (Analyst 2, as of July 17)
-cd ~/trading-system && python3 scripts/kimi_k3_reasoning.py
+cd ~/kronos-trading-system && python3 scripts/kimi_k3_reasoning.py
 
 # Run Hy3 reasoning manually (no longer in pipeline, replaced by Kimi K3 July 17)
-cd ~/trading-system && python3 scripts/hy3_reasoning.py
+cd ~/kronos-trading-system && python3 scripts/hy3_reasoning.py
 
 # Run Kimi K2 reasoning manually (no longer in pipeline — check if NVIDIA access is restored)
-cd ~/trading-system && python3 scripts/kimi_reasoning.py
+cd ~/kronos-trading-system && python3 scripts/kimi_reasoning.py
 
 # Run trade logic only (reads latest decisions_log.csv row)
-cd ~/trading-system && python3 scripts/trade_logic.py
+cd ~/kronos-trading-system && python3 scripts/trade_logic.py
 
 # Append a decision ledger row for the latest signal manually (read-only, but DOES append a real row -- avoid test runs against the live ledger)
-cd ~/trading-system && python3 scripts/decision_ledger.py
+cd ~/kronos-trading-system && python3 scripts/decision_ledger.py
 
 # Check today's regime (observe-only) and run the regime backtest
-cd ~/trading-system && python3 scripts/regime_filter.py
-cd ~/trading-system && python3 scripts/backtest_regime.py
+cd ~/kronos-trading-system && python3 scripts/regime_filter.py
+cd ~/kronos-trading-system && python3 scripts/backtest_regime.py
 
 # Rebuild the shadow bracket CSV (read-only, safe to rerun)
-cd ~/trading-system && python3 scripts/shadow_brackets.py
+cd ~/kronos-trading-system && python3 scripts/shadow_brackets.py
 
 # Check the last decision ledger rows
-tail -3 ~/trading-system/logs/decision_ledger.csv
+tail -3 ~/kronos-trading-system/logs/decision_ledger.csv
 
 # Run Alpaca execution only (dry-runs unless today's ENTER decision exists)
-cd ~/trading-system && python3 scripts/alpaca_execute.py
+cd ~/kronos-trading-system && python3 scripts/alpaca_execute.py
 
 # Check today's signal against any open position for a direction contradiction (sends Telegram alert if contradicted)
-cd ~/trading-system && python3 scripts/position_reconfirm.py
+cd ~/kronos-trading-system && python3 scripts/position_reconfirm.py
 
 # Check intraday price log (last 5 entries)
-tail -5 ~/trading-system/logs/intraday_price_log.csv
+tail -5 ~/kronos-trading-system/logs/intraday_price_log.csv
 
 # Check Alpaca paper orders placed
-cat ~/trading-system/logs/alpaca_orders.csv
+cat ~/kronos-trading-system/logs/alpaca_orders.csv
 
 # Run morning trade check manually
-cd ~/trading-system && python3 scripts/morning_check.py
+cd ~/kronos-trading-system && python3 scripts/morning_check.py
 
 # Run tech watch manually (add --dry-run to skip the Telegram send)
-cd ~/trading-system && python3 scripts/tech_watch.py
+cd ~/kronos-trading-system && python3 scripts/tech_watch.py
 
 # View tech watch log
-tail -20 ~/trading-system/logs/tech_watch.log
+tail -20 ~/kronos-trading-system/logs/tech_watch.log
 
 # Run weekly pipeline health check manually (add --dry-run to skip the Telegram send)
-cd ~/trading-system && python3 scripts/weekly_health.py
+cd ~/kronos-trading-system && python3 scripts/weekly_health.py
 
 # View weekly health check log
-tail -20 ~/trading-system/logs/weekly_health.log
+tail -20 ~/kronos-trading-system/logs/weekly_health.log
 
 # Check Andy health manually
-cd ~/trading-system && python3 scripts/andy_health.py
+cd ~/kronos-trading-system && python3 scripts/andy_health.py
 
 # View Andy health log (last 20 entries)
-tail -20 ~/trading-system/logs/andy_health.log
+tail -20 ~/kronos-trading-system/logs/andy_health.log
 
 # Check Andy auto-restart task state (from WSL)
 powershell.exe -Command "Get-ScheduledTaskInfo -TaskName 'Kronos-Andy-Autostart' | Select-Object LastRunTime, LastTaskResult, NextRunTime"
@@ -633,40 +633,40 @@ powershell.exe -Command "Stop-ScheduledTask -TaskName 'Kronos-Andy-Autostart'"
 powershell.exe -Command "Start-ScheduledTask -TaskName 'Kronos-Andy-Autostart'"
 
 # Check Alpaca account and live quote
-cd ~/trading-system && python3 scripts/alpaca_data.py
+cd ~/kronos-trading-system && python3 scripts/alpaca_data.py
 
 # Check macro snapshot (FRED)
-cd ~/trading-system && python3 scripts/fred_data.py
+cd ~/kronos-trading-system && python3 scripts/fred_data.py
 
 # Check Fear and Greed Index
-cd ~/trading-system && python3 scripts/fear_greed.py
+cd ~/kronos-trading-system && python3 scripts/fear_greed.py
 
 # Check last signal
-tail -3 ~/trading-system/logs/signal_log.csv
+tail -3 ~/kronos-trading-system/logs/signal_log.csv
 
 # Run EMA comparison
-cd ~/trading-system && python3 scripts/compare_ema_rsi.py
+cd ~/kronos-trading-system && python3 scripts/compare_ema_rsi.py
 
 # Run SPY backtest (accuracy + bracket grid + confidence/votes grid + ablation study)
-cd ~/trading-system && python3 scripts/backtest.py
+cd ~/kronos-trading-system && python3 scripts/backtest.py
 
 # Check the bracket grid backtest results (49 stop/TP combos, ranked by total PnL)
-cat ~/trading-system/logs/backtest_bracket_grid.csv
+cat ~/kronos-trading-system/logs/backtest_bracket_grid.csv
 
 # Run QQQ bracket grid backtest (49 stop/TP combos against QQQ history, added September 26)
-cd ~/trading-system && python3 scripts/backtest_qqq.py
+cd ~/kronos-trading-system && python3 scripts/backtest_qqq.py
 
 # Check the QQQ bracket grid backtest results
-cat ~/trading-system/logs/backtest_qqq_bracket_grid.csv
+cat ~/kronos-trading-system/logs/backtest_qqq_bracket_grid.csv
 
 # Check the confidence-floor / vote-threshold grid (15 combos, ranked by total PnL)
-cat ~/trading-system/logs/backtest_confidence_votes_grid.csv
+cat ~/kronos-trading-system/logs/backtest_confidence_votes_grid.csv
 
 # Check the ablation study (technical-only, 70% floor, full system, buy-and-hold)
-cat ~/trading-system/logs/backtest_ablation.csv
+cat ~/kronos-trading-system/logs/backtest_ablation.csv
 
 # If Ubuntu restarted
-cd ~/trading-system && source venv/bin/activate && bash scripts/run_pipeline.sh
+cd ~/kronos-trading-system && source venv/bin/activate && bash scripts/run_pipeline.sh
 ```
 
 ## Last Updated

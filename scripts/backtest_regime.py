@@ -18,7 +18,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import backtest as bt
 import regime_filter as rf
 
-LOGS_DIR = os.path.expanduser("~/trading-system/logs")
+LOGS_DIR = os.path.expanduser("~/kronos-trading-system/logs")
 OUTPUT_FILE = os.path.join(LOGS_DIR, "backtest_regime.csv")
 TRADE_LEDGER = os.path.join(LOGS_DIR, "trade_ledger.csv")
 ALPACA_ORDERS = os.path.join(LOGS_DIR, "alpaca_orders.csv")

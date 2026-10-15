@@ -14,7 +14,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import backtest as bt
 
 TICKER = "QQQ"
-OUTPUT_FILE = os.path.expanduser("~/trading-system/logs/backtest_qqq_bracket_grid.csv")
+OUTPUT_FILE = os.path.expanduser("~/kronos-trading-system/logs/backtest_qqq_bracket_grid.csv")
 
 def run():
     print(f"Downloading {TICKER} data from 2023-01-01...")

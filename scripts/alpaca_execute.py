@@ -8,7 +8,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from trade_logic import get_latest_decision_row, make_trade_decision, extract_verdict, calculate_trade_levels
 from alpaca_data import get_latest_quote
 
-load_dotenv(os.path.expanduser("~/trading-system/.env"))
+load_dotenv(os.path.expanduser("~/kronos-trading-system/.env"))
 
 from alpaca.trading.client import TradingClient
 from alpaca.trading.requests import (
@@ -20,7 +20,7 @@ from alpaca.common.exceptions import APIError
 TICKER = "SPY"
 PASS_NOTIONAL = 1000.0
 FLAG_NOTIONAL = 500.0
-ORDERS_LOG = os.path.expanduser("~/trading-system/logs/alpaca_orders.csv")
+ORDERS_LOG = os.path.expanduser("~/kronos-trading-system/logs/alpaca_orders.csv")
 
 
 def get_notional(verdict):

@@ -9,7 +9,7 @@ from email.utils import parsedate_to_datetime
 import requests
 from dotenv import load_dotenv
 
-load_dotenv(os.path.expanduser("~/trading-system/.env"))
+load_dotenv(os.path.expanduser("~/kronos-trading-system/.env"))
 
 OPENCLAW_CONFIG = "/mnt/c/Users/openc/.openclaw/openclaw.json"
 HN_SEARCH_URL = "https://hn.algolia.com/api/v1/search"
