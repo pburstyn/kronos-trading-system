@@ -1,5 +1,4 @@
 import csv
-import json
 import os
 import sys
 from datetime import datetime, timedelta
@@ -9,7 +8,6 @@ from dotenv import load_dotenv
 
 load_dotenv(os.path.expanduser("~/kronos-trading-system/.env"))
 
-OPENCLAW_CONFIG = "/mnt/c/Users/openc/.openclaw/openclaw.json"
 PIPELINE_LOG = os.path.expanduser("~/kronos-trading-system/logs/pipeline.log")
 DECISION_LEDGER = os.path.expanduser("~/kronos-trading-system/logs/decision_ledger.csv")
 LOOKBACK_DAYS = 7
@@ -35,9 +33,7 @@ MAX_FLAG_LINES_PER_DAY = 10
 
 
 def get_telegram_config():
-    with open(OPENCLAW_CONFIG) as f:
-        cfg = json.load(f)
-    token = cfg["channels"]["telegram"]["botToken"]
+    token = os.environ.get("TELEGRAM_BOT_TOKEN")
     chat_id = os.environ.get("TELEGRAM_CHAT_ID")
     return token, chat_id
 

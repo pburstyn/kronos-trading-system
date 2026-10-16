@@ -1,4 +1,3 @@
-import json
 import os
 from datetime import datetime, timedelta, timezone
 
@@ -13,15 +12,12 @@ from alpaca.trading.enums import QueryOrderStatus
 from alpaca.data.historical import StockHistoricalDataClient
 from alpaca.data.requests import StockLatestTradeRequest
 
-OPENCLAW_CONFIG = "/mnt/c/Users/openc/.openclaw/openclaw.json"
 TICKER = "SPY"
 ACTIVE_LEG_STATUSES = {"new", "accepted", "held", "pending_new", "partially_filled", "pending_replace"}
 
 
 def get_telegram_config():
-    with open(OPENCLAW_CONFIG) as f:
-        cfg = json.load(f)
-    token = cfg["channels"]["telegram"]["botToken"]
+    token = os.environ.get("TELEGRAM_BOT_TOKEN")
     chat_id = os.environ.get("TELEGRAM_CHAT_ID")
     return token, chat_id
 

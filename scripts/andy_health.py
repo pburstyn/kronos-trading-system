@@ -9,7 +9,6 @@ from dotenv import load_dotenv
 
 load_dotenv(os.path.expanduser("~/kronos-trading-system/.env"))
 
-OPENCLAW_CONFIG = "/mnt/c/Users/openc/.openclaw/openclaw.json"
 STATUS_FILE = os.path.expanduser("~/kronos-trading-system/logs/andy_status.json")
 HEALTH_LOG = os.path.expanduser("~/kronos-trading-system/logs/andy_health.log")
 
@@ -28,9 +27,7 @@ def check_andy():
 
 
 def get_telegram_config():
-    with open(OPENCLAW_CONFIG) as f:
-        cfg = json.load(f)
-    token = cfg["channels"]["telegram"]["botToken"]
+    token = os.environ.get("TELEGRAM_BOT_TOKEN")
     chat_id = os.environ.get("TELEGRAM_CHAT_ID")
     return token, chat_id
 

@@ -1,4 +1,3 @@
-import json
 import os
 import sys
 import xml.etree.ElementTree as ET
@@ -11,7 +10,6 @@ from dotenv import load_dotenv
 
 load_dotenv(os.path.expanduser("~/kronos-trading-system/.env"))
 
-OPENCLAW_CONFIG = "/mnt/c/Users/openc/.openclaw/openclaw.json"
 HN_SEARCH_URL = "https://hn.algolia.com/api/v1/search"
 KEYWORDS = [
     "LLM",
@@ -60,9 +58,7 @@ TITLE_SIMILARITY_THRESHOLD = 0.6
 
 
 def get_telegram_config():
-    with open(OPENCLAW_CONFIG) as f:
-        cfg = json.load(f)
-    token = cfg["channels"]["telegram"]["botToken"]
+    token = os.environ.get("TELEGRAM_BOT_TOKEN")
     chat_id = os.environ.get("TELEGRAM_CHAT_ID")
     return token, chat_id
 

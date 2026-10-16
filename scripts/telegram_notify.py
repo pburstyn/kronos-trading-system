@@ -1,5 +1,4 @@
 import csv
-import json
 import os
 import re
 import sys
@@ -13,16 +12,13 @@ load_dotenv(os.path.expanduser("~/kronos-trading-system/.env"))
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from trade_logic import get_latest_decision_row, make_trade_decision, extract_verdict
 
-OPENCLAW_CONFIG = "/mnt/c/Users/openc/.openclaw/openclaw.json"
 SIGNAL_LOG = os.path.expanduser("~/kronos-trading-system/logs/signal_log.csv")
 QQQ_SIGNAL_LOG = os.path.expanduser("~/kronos-trading-system/logs/signal_log_qqq.csv")
 ALPACA_ORDERS_LOG = os.path.expanduser("~/kronos-trading-system/logs/alpaca_orders.csv")
 
 
 def get_telegram_config():
-    with open(OPENCLAW_CONFIG) as f:
-        cfg = json.load(f)
-    token = cfg["channels"]["telegram"]["botToken"]
+    token = os.environ.get("TELEGRAM_BOT_TOKEN")
     chat_id = os.environ.get("TELEGRAM_CHAT_ID")
     return token, chat_id
 
