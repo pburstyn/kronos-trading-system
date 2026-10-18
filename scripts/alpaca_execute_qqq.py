@@ -32,6 +32,9 @@ FLAG_NOTIONAL = 500.0
 # Overlap rule (October 18): when SPY's own decision today is ENTER in the same
 # direction, QQQ trades at half its normal notional. SPY's sizing is untouched.
 SPY_OVERLAP_MULTIPLIER = 0.5
+# QQQ never holds more than 1 share (Peter, October 18). Without this cap a
+# $1,000 PASS would buy 2 shares if QQQ fell below $500.
+MAX_QTY = 1
 ORDERS_LOG = os.path.expanduser("~/kronos-trading-system/logs/alpaca_orders_qqq.csv")
 
 
@@ -128,7 +131,7 @@ def execute_trade(decision, client, dry_run=False):
         print(f"  SPY is also ENTER {spy_direction} today: QQQ sized at {SPY_OVERLAP_MULTIPLIER}x.")
 
     notional = get_notional(decision["verdict"], spy_overlap)
-    qty = max(1, int(notional / levels["entry"]))  # whole shares only — Alpaca requires DAY TIF for fractional, incompatible with GTC bracket
+    qty = min(MAX_QTY, max(1, int(notional / levels["entry"])))  # whole shares only — Alpaca requires DAY TIF for fractional, incompatible with GTC bracket
     side = OrderSide.BUY if decision["direction"] == "UP" else OrderSide.SELL
 
     order_request = MarketOrderRequest(
