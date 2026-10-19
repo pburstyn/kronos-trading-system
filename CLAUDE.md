@@ -420,6 +420,13 @@ Source of truth: `logs/trade_ledger.csv` (rebuilt from Alpaca filled orders by s
 - **Cron:** `0 18 * * 1-5` runs run_pipeline.sh (system timezone America/Los_Angeles, so 6pm PT). Cron's own output goes to `logs/pipeline_cron.log`. `/etc/wsl.conf` already had `[boot] systemd=true`, and cron is enabled, but WSL had not been restarted since, so the cron daemon wasn't running. Needs `wsl --shutdown` from PowerShell once, then `systemctl is-active cron` should print `active`.
 - **Still open:** git has no user identity configured here, and `gh` (installed to `~/.local/bin`, v2.102.0) isn't logged in, so update_claude_md.sh's auto-commit and push will fail until both are set. Check whether the OpenClaw machine still runs the pipeline; if so, both would trade the same Alpaca paper account and push to the same repo.
 
+## Data loss, October 15 2026
+- **What happened:** the old machine was reset. `logs/` is gitignored, so its contents were lost.
+- **Lost for good (everything before October 15):** decisions_log.csv, decision_ledger.csv, regime_log.csv, the analyst reasoning logs (reasoning_log.csv, kimi_k3_reasoning_log.csv) and signal_log_qqq.csv.
+- **signal_log.csv rebuilt from git history (October 19):** the tracked rows through 2026-07-17, plus one row per day from 2026-07-20 to 2026-10-14 taken from the `**Last Signal:**` line of every auto-update CLAUDE.md commit (latest timestamp per date), plus the rows written on this machine from 2026-10-15 on. 122 data rows. **2026-09-09 is missing** (no commit carries it). Rebuilt days have one row each, so same-day reruns from that period are gone. Backup of the pre-rebuild file: `logs/signal_log.csv.bak-20261019`.
+- **Effect on shadow_brackets.py:** it tracks 7 signals since 2026-09-26 again (Sep 30 DOWN, Oct 2/5/6/7/9 UP, Oct 16 DOWN). Rows before October 15 have no decision_ledger.csv match, so their `real_trade_action` is blank.
+- **Unaffected:** trade_ledger.csv, because trade_ledger.py rebuilds it from Alpaca on every run.
+
 ## Telegram Notifications — COMPLETED (June 20)
 - **Bot:** @Peters_Open_Claw_Bot (same bot OpenClaw/Andy uses). No new bot needed.
 - **Script:** `scripts/telegram_notify.py` — reads the bot token from `.env` (TELEGRAM_BOT_TOKEN) and Peter's personal chat ID from `.env` (TELEGRAM_CHAT_ID = 8344685831). **Until October 15** the token came from `/mnt/c/Users/openc/.openclaw/openclaw.json` (channels.telegram.botToken); see Pipeline Setup on HAL9000 section.
