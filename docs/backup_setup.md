@@ -1,6 +1,6 @@
 # Log Backups to Google Drive (rclone)
 
-`scripts/backup_logs.sh` runs nightly at 11:30pm PT from cron and backs up `logs/` to Google Drive:
+`scripts/backup_logs.sh` runs nightly at 8pm PT from cron and backs up `logs/` to Google Drive:
 
 - `gdrive:kronos-backup/latest/`: mirror of `logs/`, updated nightly
 - `gdrive:kronos-backup/snapshots/YYYY-MM-DD/`: full dated copy, deleted after 30 days

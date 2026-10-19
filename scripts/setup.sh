@@ -32,7 +32,7 @@ CRON_OUTCOME=$(cron_py "5 13 * * 1-5" outcome_tracker.py outcome_tracker.log)   
 CRON_TECH_WATCH=$(cron_py "5 7 * * 1" tech_watch.py tech_watch.log)
 CRON_WEEKLY_HEALTH=$(cron_py "10 7 * * 1" weekly_health.py weekly_health.log)
 CRON_ANDY_HEALTH=$(cron_py "*/30 * * * *" andy_health.py andy_health_cron.log)     # WSL2 only: calls powershell.exe
-CRON_BACKUP="30 23 * * * /bin/bash $REPO/scripts/backup_logs.sh >> $REPO/logs/backup.log 2>&1"
+CRON_BACKUP="0 20 * * * /bin/bash $REPO/scripts/backup_logs.sh >> $REPO/logs/backup.log 2>&1"
 BACKUP_REMOTE="gdrive"   # rclone remote name backup_logs.sh expects; see docs/backup_setup.md
 
 DONE=(); SKIPPED=(); MANUAL=(); FAILED=()
@@ -311,7 +311,7 @@ step_cron() {
     else
         skip "Andy health cron not installed: it checks OpenClaw via Windows powershell.exe, which only exists under WSL2"
     fi
-    ensure_cron "Log backup to Google Drive (11:30pm nightly)" "scripts/backup_logs.sh" "$CRON_BACKUP"
+    ensure_cron "Log backup to Google Drive (8pm nightly)" "scripts/backup_logs.sh" "$CRON_BACKUP"
 
     # Cron times assume Pacific time.
     local tz
