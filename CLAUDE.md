@@ -703,5 +703,5 @@ cd ~/kronos-trading-system && source venv/bin/activate && bash scripts/run_pipel
 ```
 
 ## Last Updated
-2026-10-19 18:01:43
-**Last Signal:** 2026-10-19 18:00:04,SPY,DOWN,80,766.48,MA50 $767.3 MA200 $722.33: mixed structure | RSI 47.5: bearish | MACD below signal: bearish | MACD histogram falling: bearish | Volume 38.4M neutral
+2026-10-21 18:00:25
+**Last Signal:** 2026-10-21 18:00:05,SPY,NEUTRAL,0.0,773.09,Price $773.09 above MA50 $767.35 and MA200 $723.24: bullish structure | RSI 53.8: bullish | MACD below signal: bearish | MACD histogram neutral: no vote | VERDICT: NEUTRAL — bull_votes=1 bear_votes=1 did not meet MIN_VOTES=3
